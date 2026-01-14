@@ -242,7 +242,7 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
 
       toast({
         title: "Agendamento realizado com sucesso!",
-        description: "Você receberá uma confirmação em breve.",
+        description: "Volte sempre.",
       })
 
       // Reset form

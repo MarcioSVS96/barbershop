@@ -435,7 +435,7 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
                     <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0">
                       <div
                         className="
-                          flex min-w-[720px] items-end gap-4
+                          flex min-w-180 items-end gap-4
                           md:grid md:min-w-0 md:grid-cols-12 md:gap-5
                         "
                         style={{ height: BAR_MAX_PX + 60 }} // espaço pra valor + label
