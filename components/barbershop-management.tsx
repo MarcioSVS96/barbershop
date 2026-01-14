@@ -1,45 +1,19 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useMemo, useState } from "react"
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 import { createClient } from "@/lib/supabase/client"
 import { useToast } from "@/hooks/use-toast"
 
-import {
-  Plus,
-  Trash2,
-  TrendingUp,
-  DollarSign,
-  Calendar as CalendarIcon,
-  Edit,
-} from "lucide-react"
+import { Plus, Trash2, TrendingUp, DollarSign, Calendar as CalendarIcon, Edit, UserRound } from "lucide-react"
 
 import { isSameWeek, isSameMonth, format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -53,15 +27,9 @@ interface BarbershopManagementProps {
   today: string
 }
 
-export function BarbershopManagement({
-  barbers: initialBarbers,
-  payments,
-  today,
-}: BarbershopManagementProps) {
+export function BarbershopManagement({ barbers: initialBarbers, payments, today }: BarbershopManagementProps) {
   const [barbers, setBarbers] = useState<Barber[]>(initialBarbers)
-  const [selectedBarberId, setSelectedBarberId] = useState<string>(
-    initialBarbers.length > 0 ? initialBarbers[0].id : "",
-  )
+  const [selectedBarberId, setSelectedBarberId] = useState<string>(initialBarbers.length > 0 ? initialBarbers[0].id : "")
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
   const [editingBarber, setEditingBarber] = useState<Barber | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -72,6 +40,8 @@ export function BarbershopManagement({
 
   const { toast } = useToast()
   const supabase = createClient()
+
+  const selectedBarber = useMemo(() => barbers.find((b) => b.id === selectedBarberId) || null, [barbers, selectedBarberId])
 
   // =========================
   // CREATE / UPDATE BARBER
@@ -88,18 +58,10 @@ export function BarbershopManagement({
 
       // UPDATE
       if (editingBarber) {
-        const { error } = await supabase
-          .from("barbers")
-          .update(barberData)
-          .eq("id", editingBarber.id)
-
+        const { error } = await supabase.from("barbers").update(barberData).eq("id", editingBarber.id)
         if (error) throw error
 
-        setBarbers((prev) =>
-          prev.map((b) =>
-            b.id === editingBarber.id ? { ...b, ...barberData } : b,
-          ),
-        )
+        setBarbers((prev) => prev.map((b) => (b.id === editingBarber.id ? { ...b, ...barberData } : b)))
 
         toast({
           title: "Barbeiro atualizado",
@@ -108,11 +70,7 @@ export function BarbershopManagement({
       }
       // CREATE
       else {
-        const { data, error } = await supabase
-          .from("barbers")
-          .insert(barberData)
-          .select()
-          .single()
+        const { data, error } = await supabase.from("barbers").insert(barberData).select().single()
 
         if (error) throw error
         if (!data) throw new Error("Erro ao criar barbeiro")
@@ -137,8 +95,7 @@ export function BarbershopManagement({
       console.error("Error saving barber:", error)
       toast({
         title: "Erro",
-        description:
-          error.message || "Não foi possível salvar as informações.",
+        description: error.message || "Não foi possível salvar as informações.",
         variant: "destructive",
       })
     } finally {
@@ -172,8 +129,7 @@ export function BarbershopManagement({
       console.error("Error deleting barber:", error)
       toast({
         title: "Erro",
-        description:
-          "Não foi possível excluir o barbeiro. Verifique se há agendamentos vinculados.",
+        description: "Não foi possível excluir o barbeiro. Verifique se há agendamentos vinculados.",
         variant: "destructive",
       })
     } finally {
@@ -198,9 +154,7 @@ export function BarbershopManagement({
   // =========================
   // FINANCIAL CALCULATIONS
   // =========================
-  const selectedBarberPayments = payments.filter(
-    (p) => p.appointments?.barber_id === selectedBarberId,
-  )
+  const selectedBarberPayments = payments.filter((p) => p.appointments?.barber_id === selectedBarberId)
 
   const todayDate = new Date(today)
 
@@ -210,35 +164,17 @@ export function BarbershopManagement({
       .reduce((acc, curr) => acc + Number(curr.amount), 0),
 
     week: selectedBarberPayments
-      .filter(
-        (p) =>
-          p.appointments?.appointment_date &&
-          isSameWeek(
-            new Date(p.appointments.appointment_date),
-            todayDate,
-          ),
-      )
+      .filter((p) => p.appointments?.appointment_date && isSameWeek(new Date(p.appointments.appointment_date), todayDate))
       .reduce((acc, curr) => acc + Number(curr.amount), 0),
 
     month: selectedBarberPayments
-      .filter(
-        (p) =>
-          p.appointments?.appointment_date &&
-          isSameMonth(
-            new Date(p.appointments.appointment_date),
-            todayDate,
-          ),
-      )
+      .filter((p) => p.appointments?.appointment_date && isSameMonth(new Date(p.appointments.appointment_date), todayDate))
       .reduce((acc, curr) => acc + Number(curr.amount), 0),
   }
 
   const selectedDateRevenue = selectedDate
     ? selectedBarberPayments
-        .filter(
-          (p) =>
-            p.appointments?.appointment_date ===
-            format(selectedDate, "yyyy-MM-dd"),
-        )
+        .filter((p) => p.appointments?.appointment_date === format(selectedDate, "yyyy-MM-dd"))
         .reduce((acc, curr) => acc + Number(curr.amount), 0)
     : 0
 
@@ -248,19 +184,22 @@ export function BarbershopManagement({
   return (
     <div className="space-y-6">
       {/* GERENCIAR BARBEIROS */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Gerenciar Barbeiros</CardTitle>
-              <CardDescription>
-                Adicione ou remova profissionais da equipe
-              </CardDescription>
+      <Card className="border-muted/60 shadow-sm">
+        <CardHeader className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/40">
+                  <UserRound className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <CardTitle className="text-lg sm:text-xl">Gerenciar Barbeiros</CardTitle>
+              </div>
+              <CardDescription>Adicione, edite ou remova profissionais da equipe</CardDescription>
             </div>
 
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={openAddDialog}>
+                <Button onClick={openAddDialog} className="w-full sm:w-auto">
                   <Plus className="mr-2 h-4 w-4" />
                   Adicionar Barbeiro
                 </Button>
@@ -268,45 +207,28 @@ export function BarbershopManagement({
 
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>
-                    {editingBarber ? "Editar Barbeiro" : "Novo Barbeiro"}
-                  </DialogTitle>
+                  <DialogTitle>{editingBarber ? "Editar Barbeiro" : "Novo Barbeiro"}</DialogTitle>
                   <DialogDescription>
-                    {editingBarber
-                      ? "Edite as informações do profissional."
-                      : "Cadastre um novo profissional."}
+                    {editingBarber ? "Edite as informações do profissional." : "Cadastre um novo profissional."}
                   </DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={handleSaveBarber} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Nome</Label>
-                    <Input
-                      id="name"
-                      value={newBarberName}
-                      onChange={(e) => setNewBarberName(e.target.value)}
-                      required
-                    />
+                    <Input id="name" value={newBarberName} onChange={(e) => setNewBarberName(e.target.value)} required />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="specialty">
-                      Especialidade (opcional)
-                    </Label>
+                    <Label htmlFor="specialty">Especialidade (opcional)</Label>
                     <Input
                       id="specialty"
                       value={newBarberSpecialty}
-                      onChange={(e) =>
-                        setNewBarberSpecialty(e.target.value)
-                      }
+                      onChange={(e) => setNewBarberSpecialty(e.target.value)}
                     />
                   </div>
 
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={isLoading}
-                  >
+                  <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? "Salvando..." : "Salvar"}
                   </Button>
                 </form>
@@ -316,28 +238,19 @@ export function BarbershopManagement({
         </CardHeader>
 
         <CardContent>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {barbers.map((barber) => (
               <div
                 key={barber.id}
-                className="flex items-center justify-between rounded-lg border p-4"
+                className="flex items-center justify-between gap-3 rounded-xl border bg-muted/10 p-4 transition-colors hover:bg-muted/20"
               >
-                <div>
-                  <p className="font-medium">{barber.name}</p>
-                  {barber.specialty && (
-                    <p className="text-sm text-muted-foreground">
-                      {barber.specialty}
-                    </p>
-                  )}
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{barber.name}</p>
+                  {barber.specialty && <p className="truncate text-sm text-muted-foreground">{barber.specialty}</p>}
                 </div>
 
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => openEditDialog(barber)}
-                    disabled={isLoading}
-                  >
+                <div className="flex shrink-0 gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => openEditDialog(barber)} disabled={isLoading}>
                     <Edit className="h-4 w-4" />
                   </Button>
 
@@ -346,38 +259,30 @@ export function BarbershopManagement({
                     size="icon"
                     onClick={() => handleDeleteBarber(barber.id)}
                     disabled={isLoading}
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
             ))}
 
-            {barbers.length === 0 && (
-              <p className="text-center text-muted-foreground">
-                Nenhum barbeiro cadastrado.
-              </p>
-            )}
+            {barbers.length === 0 && <p className="text-center text-muted-foreground">Nenhum barbeiro cadastrado.</p>}
           </div>
         </CardContent>
       </Card>
 
       {/* RELATÓRIO FINANCEIRO */}
-      <Card>
-        <CardHeader>
+      <Card className="border-muted/60 shadow-sm">
+        <CardHeader className="space-y-3">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Relatório Financeiro por Barbeiro</CardTitle>
-              <CardDescription>
-                Visualize o desempenho individual
-              </CardDescription>
+            <div className="space-y-1">
+              <CardTitle className="text-lg sm:text-xl">Relatório Financeiro por Barbeiro</CardTitle>
+              <CardDescription>Visualize o desempenho individual e o faturamento por data</CardDescription>
             </div>
 
-            <div className="w-full sm:w-50">
-              <Select
-                value={selectedBarberId}
-                onValueChange={setSelectedBarberId}
-              >
+            <div className="w-full sm:w-64">
+              <Select value={selectedBarberId} onValueChange={setSelectedBarberId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione um barbeiro" />
                 </SelectTrigger>
@@ -395,76 +300,78 @@ export function BarbershopManagement({
 
         <CardContent>
           {selectedBarberId ? (
-            <div className="space-y-8">
+            <div className="space-y-6">
+              {/* stats */}
               <div className="grid gap-4 md:grid-cols-3">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm">Hoje</CardTitle>
-                    <DollarSign className="h-4 w-4" />
+                <Card className="border-muted/60 bg-muted/10 shadow-none">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm text-muted-foreground">Hoje</CardTitle>
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">
-                      R$ {stats.today.toFixed(2)}
-                    </div>
+                    <div className="text-2xl font-semibold">R$ {stats.today.toFixed(2)}</div>
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm">Esta Semana</CardTitle>
-                    <CalendarIcon className="h-4 w-4" />
+                <Card className="border-muted/60 bg-muted/10 shadow-none">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm text-muted-foreground">Esta semana</CardTitle>
+                    <CalendarIcon className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">
-                      R$ {stats.week.toFixed(2)}
-                    </div>
+                    <div className="text-2xl font-semibold">R$ {stats.week.toFixed(2)}</div>
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm">Este Mês</CardTitle>
-                    <TrendingUp className="h-4 w-4" />
+                <Card className="border-muted/60 bg-muted/10 shadow-none">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm text-muted-foreground">Este mês</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">
-                      R$ {stats.month.toFixed(2)}
-                    </div>
+                    <div className="text-2xl font-semibold">R$ {stats.month.toFixed(2)}</div>
                   </CardContent>
                 </Card>
               </div>
 
-              <div className="grid gap-6 md:grid-cols-2">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={setSelectedDate}
-                  locale={ptBR}
-                />
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>
-                      Faturamento em{" "}
-                      {selectedDate
-                        ? format(selectedDate, "dd 'de' MMMM", {
-                            locale: ptBR,
-                          })
-                        : "-"}
+              {/* calendar + revenue */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                <Card className="border-muted/60 bg-muted/10 shadow-none">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                      Selecione uma data
                     </CardTitle>
+                    <CardDescription>Veja o faturamento no dia escolhido</CardDescription>
+                  </CardHeader>
+
+                  {/* ✅ centraliza o calendário */}
+                  <CardContent className="flex justify-center">
+                    <div className="rounded-lg border bg-background p-2">
+                      <Calendar mode="single" selected={selectedDate} onSelect={setSelectedDate} locale={ptBR} />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-muted/60 shadow-sm">
+                  <CardHeader className="space-y-1">
+                    <CardTitle className="text-base">
+                      Faturamento em{" "}
+                      {selectedDate ? format(selectedDate, "dd 'de' MMMM", { locale: ptBR }) : "-"}
+                    </CardTitle>
+                    <CardDescription>Somatório de pagamentos na data selecionada</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-4xl font-bold">
-                      R$ {selectedDateRevenue.toFixed(2)}
+                    <div className="rounded-xl border bg-muted/10 p-6">
+                      <div className="text-sm text-muted-foreground mb-2">Total</div>
+                      <div className="text-4xl font-semibold tracking-tight">R$ {selectedDateRevenue.toFixed(2)}</div>
                     </div>
                   </CardContent>
                 </Card>
               </div>
             </div>
           ) : (
-            <p className="text-muted-foreground">
-              Selecione um barbeiro para ver os dados
-            </p>
+            <p className="text-muted-foreground">Selecione um barbeiro para ver os dados</p>
           )}
         </CardContent>
       </Card>

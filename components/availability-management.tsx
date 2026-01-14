@@ -194,7 +194,7 @@ export function AvailabilityManagement({ availability: initialAvailability }: Av
                       value={item.start_time}
                       onChange={(e) => handleUpdate(item.day_of_week, "start_time", e.target.value)}
                       disabled={!item.is_active}
-                      className="w-[110px]"
+                      className="w-27.5"
                     />
                     <span className="text-xs text-muted-foreground">até</span>
                     <Input
@@ -202,7 +202,7 @@ export function AvailabilityManagement({ availability: initialAvailability }: Av
                       value={item.end_time}
                       onChange={(e) => handleUpdate(item.day_of_week, "end_time", e.target.value)}
                       disabled={!item.is_active}
-                      className="w-[110px]"
+                      className="w-27.5"
                     />
                   </div>
                 </div>
@@ -246,14 +246,14 @@ export function AvailabilityManagement({ availability: initialAvailability }: Av
                                 type="time"
                                 value={brk.start}
                                 onChange={(e) => updateBreak(item.day_of_week, idx, "start", e.target.value)}
-                                className="h-9 w-[110px]"
+                                className="h-9 w-27.5"
                               />
                               <span className="text-xs text-muted-foreground">até</span>
                               <Input
                                 type="time"
                                 value={brk.end}
                                 onChange={(e) => updateBreak(item.day_of_week, idx, "end", e.target.value)}
-                                className="h-9 w-[110px]"
+                                className="h-9 w-27.5"
                               />
                             </div>
 
