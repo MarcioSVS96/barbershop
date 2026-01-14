@@ -71,28 +71,41 @@ export default async function DashboardPage() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
-        <div className="container mx-auto flex items-center justify-between px-4 py-4">
-          <div className="flex items-center gap-3">
+        <div className="container mx-auto flex flex-col md:flex-row items-start md:items-center justify-between px-4 py-4">
+          <div className="flex w-full items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
               <Scissors className="h-5 w-5 text-primary-foreground" />
             </div>
+
             <div>
               <h1 className="text-xl font-bold">Painel do Barbeiro</h1>
               <p className="text-sm text-muted-foreground">{user.email}</p>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" asChild>
-              <Link href="/">Ver site público</Link>
-            </Button>
-            <form action="/auth/logout" method="post">
-              <Button variant="ghost" size="icon" type="submit">
+
+            {/* botão sair: empurrado para o canto direito */}
+            <form action="/auth/logout" method="post" className="ml-auto">
+              <Button
+                variant="ghost"
+                size="icon"
+                type="submit"
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                aria-label="Sair"
+              >
                 <LogOut className="h-5 w-5" />
               </Button>
             </form>
           </div>
+
+          {/* margem superior só no mobile */}
+          <div className="flex items-center gap-2 mt-3 md:mt-0">
+            <Button variant="outline" asChild>
+              <Link href="/">Ver site público</Link>
+            </Button>
+          </div>
         </div>
       </header>
+
+
 
       <main className="container mx-auto px-4 py-8">
         <DashboardStats
