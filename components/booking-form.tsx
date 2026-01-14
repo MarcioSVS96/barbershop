@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { CalendarIcon, Clock } from "lucide-react"
-import { format, addMinutes, parse } from "date-fns"
+import { format, addMinutes, parse, isSameDay } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import type { Service, Barber } from "@/lib/types"
 
@@ -47,13 +47,14 @@ const allTimeSlots = [
   "19:00",
 ]
 
+// ✅ margem de segurança para “agendar em cima da hora”
+const MINUTES_CUTOFF = 5
+
 export function BookingForm({ services, barbers }: BookingFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date>()
   const [selectedService, setSelectedService] = useState<string>("")
-  const [selectedBarber, setSelectedBarber] = useState<string>(
-    barbers.length === 1 ? barbers[0].id : ""
-  )
+  const [selectedBarber, setSelectedBarber] = useState<string>(barbers.length === 1 ? barbers[0].id : "")
   const [selectedTime, setSelectedTime] = useState<string>("")
   const [clientName, setClientName] = useState("")
   const [clientPhone, setClientPhone] = useState("")
@@ -80,11 +81,7 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
     const dayOfWeek = date.getDay()
 
     // Fetch availability for the selected day
-    const { data: availability } = await supabase
-      .from("availability")
-      .select("*")
-      .eq("day_of_week", dayOfWeek)
-      .single()
+    const { data: availability } = await supabase.from("availability").select("*").eq("day_of_week", dayOfWeek).single()
 
     if (!availability || !availability.is_active) {
       setAvailableTimeSlots([])
@@ -159,25 +156,45 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
       })
     }
 
-    // Also check if selected service would extend beyond closing time (19:30)
-    // Use availability.end_time instead of hardcoded 19:30
+    // Use availability.end_time as closing time
     const closingTime = parse(availability.end_time.slice(0, 5), "HH:mm", new Date())
+
+    const now = new Date()
+    const cutoffNow = addMinutes(now, MINUTES_CUTOFF) // ✅ margem
 
     const available = slots.filter((slot) => {
       if (occupiedSlots.has(slot)) return false
 
+      // Checa se o serviço cabe até o fechamento
       const slotTime = parse(slot, "HH:mm", new Date())
       const endTime = addMinutes(slotTime, service.duration)
+      if (endTime > closingTime) return false
 
-      return endTime <= closingTime
+      // ✅ NOVO: se for HOJE, remove horários que já passaram (com margem)
+      if (isSameDay(date, now)) {
+        // monta um Date real com o dia selecionado + hora do slot
+        const slotDateTime = new Date(date)
+        const [hh, mm] = slot.split(":").map((n) => Number(n))
+        slotDateTime.setHours(hh, mm, 0, 0)
+
+        // se já passou (ou está muito próximo), bloqueia
+        if (slotDateTime <= cutoffNow) return false
+      }
+
+      return true
     })
 
     setAvailableTimeSlots(available)
+
+    // ✅ se o horário selecionado ficou inválido após recalcular, limpa seleção
+    if (selectedTime && !available.includes(selectedTime)) {
+      setSelectedTime("")
+    }
   }
 
   const handleServiceChange = (serviceId: string) => {
     setSelectedService(serviceId)
-    setSelectedTime("") // Reset time selection
+    setSelectedTime("")
     if (serviceId && selectedBarber && selectedDate) {
       calculateAvailableTimeSlots(serviceId, selectedBarber, selectedDate)
     }
@@ -185,7 +202,7 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
 
   const handleBarberChange = (barberId: string) => {
     setSelectedBarber(barberId)
-    setSelectedTime("") // Reset time selection
+    setSelectedTime("")
     if (selectedService && barberId && selectedDate) {
       calculateAvailableTimeSlots(selectedService, barberId, selectedDate)
     }
@@ -193,9 +210,11 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
 
   const handleDateChange = (date: Date | undefined) => {
     setSelectedDate(date)
-    setSelectedTime("") // Reset time selection
+    setSelectedTime("")
     if (date && selectedService && selectedBarber) {
       calculateAvailableTimeSlots(selectedService, selectedBarber, date)
+    } else {
+      setAvailableTimeSlots(allTimeSlots)
     }
   }
 
@@ -356,11 +375,7 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
               <Label>Data</Label>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start text-left font-normal bg-transparent"
-                    type="button"
-                  >
+                  <Button variant="outline" className="w-full justify-start text-left font-normal bg-transparent" type="button">
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {selectedDate ? format(selectedDate, "PPP", { locale: ptBR }) : "Selecione a data"}
                   </Button>
