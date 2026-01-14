@@ -3,7 +3,15 @@ import { createClient } from "@/lib/supabase/server"
 import { DashboardStats } from "@/components/dashboard-stats"
 import { AppointmentsList } from "@/components/appointments-list"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { LogOut, Scissors } from "lucide-react"
+import {
+  LogOut,
+  Scissors,
+  LayoutDashboard,
+  CalendarDays,
+  Briefcase,
+  Clock,
+  DollarSign,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { ServiceManagement } from "@/components/service-management"
@@ -106,12 +114,35 @@ export default async function DashboardPage() {
 
       <main className="container mx-auto px-4 py-8">
         <Tabs defaultValue="overview" className="mt-2">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="overview">Visão geral</TabsTrigger>
-            <TabsTrigger value="appointments">Agendamentos</TabsTrigger>
-            <TabsTrigger value="services">Serviços</TabsTrigger>
-            <TabsTrigger value="availability">Horários</TabsTrigger>
-            <TabsTrigger value="financial">Financeiro</TabsTrigger>
+          {/* 
+            Mobile: mostra ícones; texto aparece só na aba ativa (ao lado do ícone).
+            Desktop (md+): mostra texto sempre, layout em grid 5 colunas.
+          */}
+          <TabsList className="flex w-full items-center justify-between gap-1 md:grid md:grid-cols-5 md:gap-2">
+            <TabsTrigger value="overview" className="group flex items-center gap-2 px-3 md:px-4">
+              <LayoutDashboard className="h-4 w-4" />
+              <span className="hidden md:inline group-data-[state=active]:inline">Visão geral</span>
+            </TabsTrigger>
+
+            <TabsTrigger value="appointments" className="group flex items-center gap-2 px-3 md:px-4">
+              <CalendarDays className="h-4 w-4" />
+              <span className="hidden md:inline group-data-[state=active]:inline">Agendamentos</span>
+            </TabsTrigger>
+
+            <TabsTrigger value="services" className="group flex items-center gap-2 px-3 md:px-4">
+              <Briefcase className="h-4 w-4" />
+              <span className="hidden md:inline group-data-[state=active]:inline">Serviços</span>
+            </TabsTrigger>
+
+            <TabsTrigger value="availability" className="group flex items-center gap-2 px-3 md:px-4">
+              <Clock className="h-4 w-4" />
+              <span className="hidden md:inline group-data-[state=active]:inline">Horários</span>
+            </TabsTrigger>
+
+            <TabsTrigger value="financial" className="group flex items-center gap-2 px-3 md:px-4">
+              <DollarSign className="h-4 w-4" />
+              <span className="hidden md:inline group-data-[state=active]:inline">Financeiro</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="mt-6">
