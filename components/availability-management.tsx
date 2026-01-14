@@ -233,9 +233,15 @@ export function AvailabilityManagement({ availability: initialAvailability }: Av
                         {item.breaks?.map((brk, idx) => (
                           <div
                             key={idx}
-                            className="flex flex-col gap-2 rounded-lg border bg-muted/10 p-3 sm:flex-row sm:items-center sm:justify-between"
+                            className="flex items-center justify-between gap-3 rounded-lg border bg-muted/10 p-3"
                           >
-                            <div className="flex items-center gap-2">
+                            {/* 
+                              ✅ Aqui está o ajuste:
+                              - sempre em linha (flex items-center)
+                              - não vira coluna no mobile
+                              - o bloco dos horários pode encolher (min-w-0)
+                            */}
+                            <div className="flex min-w-0 items-center gap-2">
                               <Input
                                 type="time"
                                 value={brk.start}
@@ -251,10 +257,11 @@ export function AvailabilityManagement({ availability: initialAvailability }: Av
                               />
                             </div>
 
+                            {/* lixeira sempre na mesma linha */}
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-9 w-9 self-end text-destructive hover:bg-destructive/10 hover:text-destructive sm:self-auto"
+                              className="h-9 w-9 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
                               onClick={() => removeBreak(item.day_of_week, idx)}
                               aria-label="Remover intervalo"
                             >
