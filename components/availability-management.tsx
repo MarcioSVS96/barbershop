@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -34,6 +35,8 @@ interface AvailabilityManagementProps {
 }
 
 export function AvailabilityManagement({ availability: initialAvailability }: AvailabilityManagementProps) {
+  const router = useRouter()
+
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
   const supabase = createClient()
@@ -107,6 +110,9 @@ export function AvailabilityManagement({ availability: initialAvailability }: Av
         title: "Horários atualizados",
         description: "A disponibilidade foi salva com sucesso.",
       })
+
+      // ✅ Atualiza dados do Server Component (sem F5)
+      router.refresh()
     } catch (error: any) {
       console.error("Error saving availability:", JSON.stringify(error, null, 2))
       toast({
@@ -171,12 +177,8 @@ export function AvailabilityManagement({ availability: initialAvailability }: Av
                       onCheckedChange={(checked) => handleUpdate(item.day_of_week, "is_active", checked)}
                     />
                     <div className="leading-tight">
-                      <Label className={item.is_active ? "font-medium" : "text-muted-foreground"}>
-                        {item.label}
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        {item.is_active ? "Aberto para agendamentos" : "Fechado"}
-                      </p>
+                      <Label className={item.is_active ? "font-medium" : "text-muted-foreground"}>{item.label}</Label>
+                      <p className="text-xs text-muted-foreground">{item.is_active ? "Aberto para agendamentos" : "Fechado"}</p>
                     </div>
                   </div>
                 </div>
@@ -214,12 +216,7 @@ export function AvailabilityManagement({ availability: initialAvailability }: Av
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm font-medium">Intervalos (pausas)</Label>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8"
-                        onClick={() => addBreak(item.day_of_week)}
-                      >
+                      <Button variant="outline" size="sm" className="h-8" onClick={() => addBreak(item.day_of_week)}>
                         <Plus className="mr-2 h-3 w-3" /> Adicionar
                       </Button>
                     </div>
@@ -235,12 +232,6 @@ export function AvailabilityManagement({ availability: initialAvailability }: Av
                             key={idx}
                             className="flex items-center justify-between gap-3 rounded-lg border bg-muted/10 p-3"
                           >
-                            {/* 
-                              ✅ Aqui está o ajuste:
-                              - sempre em linha (flex items-center)
-                              - não vira coluna no mobile
-                              - o bloco dos horários pode encolher (min-w-0)
-                            */}
                             <div className="flex min-w-0 items-center gap-2">
                               <Input
                                 type="time"
@@ -257,7 +248,6 @@ export function AvailabilityManagement({ availability: initialAvailability }: Av
                               />
                             </div>
 
-                            {/* lixeira sempre na mesma linha */}
                             <Button
                               variant="ghost"
                               size="icon"

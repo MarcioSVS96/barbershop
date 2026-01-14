@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -28,6 +29,8 @@ interface BarbershopManagementProps {
 }
 
 export function BarbershopManagement({ barbers: initialBarbers, payments, today }: BarbershopManagementProps) {
+  const router = useRouter()
+
   const [barbers, setBarbers] = useState<Barber[]>(initialBarbers)
   const [selectedBarberId, setSelectedBarberId] = useState<string>(initialBarbers.length > 0 ? initialBarbers[0].id : "")
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
@@ -41,7 +44,10 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
   const { toast } = useToast()
   const supabase = createClient()
 
-  const selectedBarber = useMemo(() => barbers.find((b) => b.id === selectedBarberId) || null, [barbers, selectedBarberId])
+  const selectedBarber = useMemo(
+    () => barbers.find((b) => b.id === selectedBarberId) || null,
+    [barbers, selectedBarberId],
+  )
 
   // =========================
   // CREATE / UPDATE BARBER
@@ -91,6 +97,9 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
       setNewBarberSpecialty("")
       setEditingBarber(null)
       setIsDialogOpen(false)
+
+      // ✅ Atualiza dados do Server Component (sem F5)
+      router.refresh()
     } catch (error: any) {
       console.error("Error saving barber:", error)
       toast({
@@ -125,6 +134,9 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
         title: "Barbeiro excluído",
         description: "O barbeiro foi removido com sucesso.",
       })
+
+      // ✅ Atualiza dados do Server Component (sem F5)
+      router.refresh()
     } catch (error) {
       console.error("Error deleting barber:", error)
       toast({
@@ -155,7 +167,6 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
   // FINANCIAL CALCULATIONS
   // =========================
 
-  // ✅ melhoria: memoiza o filtro (evita refiltrar a cada render)
   const selectedBarberPayments = useMemo(
     () => payments.filter((p) => p.appointments?.barber_id === selectedBarberId),
     [payments, selectedBarberId],
@@ -203,7 +214,6 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
       const d = new Date(dateStr)
       if (Number.isNaN(d.getTime())) continue
 
-      // ✅ apenas ano atual
       if (d.getFullYear() !== currentYear) continue
 
       const month = d.getMonth()
@@ -220,10 +230,9 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
 
   const maxMonthlyRevenue = useMemo(() => {
     const max = Math.max(...monthlyRevenueData.map((m) => Number(m.revenue || 0)))
-    return max > 0 ? max : 1 // evita divisão por zero
+    return max > 0 ? max : 1
   }, [monthlyRevenueData])
 
-  // ✅ altura máxima do gráfico em px (barras proporcionais reais)
   const BAR_MAX_PX = 160
 
   // =========================
@@ -393,7 +402,6 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
                     <CardDescription>Veja o faturamento no dia escolhido</CardDescription>
                   </CardHeader>
 
-                  {/* ✅ centraliza o calendário */}
                   <CardContent className="flex justify-center">
                     <div className="rounded-lg border bg-background p-2">
                       <Calendar mode="single" selected={selectedDate} onSelect={setSelectedDate} locale={ptBR} />
@@ -417,7 +425,7 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
                 </Card>
               </div>
 
-              {/* ✅ GRÁFICO: LUCRO MENSAL (ANO ATUAL, TODOS OS MESES, SEM LIBS) */}
+              {/* GRÁFICO */}
               <Card className="border-muted/60 shadow-sm">
                 <CardHeader className="space-y-1">
                   <CardTitle className="text-base">Lucro mensal ({currentYear})</CardTitle>
@@ -431,14 +439,13 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
                   </div>
 
                   <div className="rounded-xl border bg-muted/10 p-4">
-                    {/* MOBILE: scroll horizontal | DESKTOP: grid 12 colunas */}
                     <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0">
                       <div
                         className="
                           flex min-w-180 items-end gap-4
                           md:grid md:min-w-0 md:grid-cols-12 md:gap-5
                         "
-                        style={{ height: BAR_MAX_PX + 60 }} // espaço pra valor + label
+                        style={{ height: BAR_MAX_PX + 60 }}
                       >
                         {monthlyRevenueData.map((m) => {
                           const revenue = Number(m.revenue || 0)
@@ -447,14 +454,11 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
 
                           return (
                             <div key={m.monthIndex} className="flex flex-col items-center justify-end">
-                              {/* valor em cima */}
                               <div className="mb-2 text-[11px] text-muted-foreground tabular-nums">
                                 {revenue > 0 ? `R$ ${revenue.toFixed(0)}` : "—"}
                               </div>
 
-                              {/* área do gráfico (altura fixa) */}
                               <div className="flex w-10 items-end justify-center" style={{ height: BAR_MAX_PX }}>
-                                {/* barra proporcional real */}
                                 <div
                                   className="w-full rounded-lg border bg-background"
                                   title={`${m.monthLabel}/${currentYear}: R$ ${revenue.toFixed(2)}`}
@@ -465,7 +469,6 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
                                 />
                               </div>
 
-                              {/* mês */}
                               <div className="mt-2 text-xs text-muted-foreground">{m.monthLabel}</div>
                             </div>
                           )

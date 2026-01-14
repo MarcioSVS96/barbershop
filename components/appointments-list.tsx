@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -38,6 +39,8 @@ const statusLabels = {
 type QuickFilter = "today" | "tomorrow" | "next7" | "all" | "date"
 
 export function AppointmentsList({ appointments: initialAppointments }: AppointmentsListProps) {
+  const router = useRouter()
+
   const [appointments, setAppointments] = useState(initialAppointments)
   const [isLoading, setIsLoading] = useState(false)
   const [paymentDialog, setPaymentDialog] = useState<string | null>(null)
@@ -67,6 +70,9 @@ export function AppointmentsList({ appointments: initialAppointments }: Appointm
         title: "Status atualizado",
         description: "O agendamento foi atualizado com sucesso.",
       })
+
+      // ✅ Atualiza dados do Server Component (sem F5)
+      router.refresh()
     } catch (error) {
       console.error("[v0] Update status error:", error)
       toast({
@@ -100,6 +106,7 @@ export function AppointmentsList({ appointments: initialAppointments }: Appointm
 
       if (error) throw error
 
+      // ✅ Atualiza localmente e no banco
       await updateStatus(appointmentId, "completed")
 
       toast({
@@ -109,7 +116,9 @@ export function AppointmentsList({ appointments: initialAppointments }: Appointm
 
       setPaymentDialog(null)
       setPaymentAmount("")
-      window.location.reload()
+
+      // ✅ Garante refresh do dashboard (pagamentos/estatísticas)
+      router.refresh()
     } catch (error) {
       console.error("[v0] Payment error:", error)
       toast({
@@ -369,9 +378,7 @@ export function AppointmentsList({ appointments: initialAppointments }: Appointm
                                   value={paymentAmount}
                                   onChange={(e) => setPaymentAmount(e.target.value)}
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                  Deixe em branco para usar o valor do agendamento
-                                </p>
+                                <p className="text-xs text-muted-foreground">Deixe em branco para usar o valor do agendamento</p>
                               </div>
                             </div>
 

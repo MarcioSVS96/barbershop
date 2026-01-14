@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -28,6 +29,8 @@ interface ServiceManagementProps {
 }
 
 export function ServiceManagement({ services: initialServices }: ServiceManagementProps) {
+  const router = useRouter()
+
   const [services, setServices] = useState(initialServices)
   const [isLoading, setIsLoading] = useState(false)
   const [editingService, setEditingService] = useState<Service | null>(null)
@@ -105,6 +108,9 @@ export function ServiceManagement({ services: initialServices }: ServiceManageme
 
       setIsDialogOpen(false)
       resetForm()
+
+      // ✅ Atualiza dados do Server Component (sem F5)
+      router.refresh()
     } catch (error) {
       console.error("[v0] Service error:", error)
       toast({
@@ -132,6 +138,9 @@ export function ServiceManagement({ services: initialServices }: ServiceManageme
           ? "O serviço não aparecerá mais para novos agendamentos."
           : "O serviço está disponível para agendamentos.",
       })
+
+      // ✅ Atualiza dados do Server Component (sem F5)
+      router.refresh()
     } catch (error) {
       console.error("[v0] Toggle service error:", error)
       toast({
@@ -159,6 +168,9 @@ export function ServiceManagement({ services: initialServices }: ServiceManageme
         title: "Serviço excluído",
         description: "O serviço foi removido com sucesso.",
       })
+
+      // ✅ Atualiza dados do Server Component (sem F5)
+      router.refresh()
     } catch (error) {
       console.error("[v0] Delete service error:", error)
       toast({

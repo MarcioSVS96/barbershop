@@ -330,6 +330,25 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="barber">Barbeiro</Label>
+            <Select value={selectedBarber} onValueChange={handleBarberChange} required>
+              <SelectTrigger id="barber">
+                <SelectValue placeholder="Selecione um barbeiro" />
+              </SelectTrigger>
+              <SelectContent>
+                {barbers.map((barber) => (
+                  <SelectItem key={barber.id} value={barber.id}>
+                    <div className="flex flex-col">
+                      <span>{barber.name}</span>
+                      {barber.specialty && <span className="text-xs text-muted-foreground">{barber.specialty}</span>}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="service">Serviço</Label>
             <Select value={selectedService} onValueChange={handleServiceChange} required>
               <SelectTrigger id="service">
@@ -349,25 +368,6 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
               </SelectContent>
             </Select>
             {selectedServiceData && <p className="text-sm text-muted-foreground">{selectedServiceData.description}</p>}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="barber">Barbeiro</Label>
-            <Select value={selectedBarber} onValueChange={handleBarberChange} required>
-              <SelectTrigger id="barber">
-                <SelectValue placeholder="Selecione um barbeiro" />
-              </SelectTrigger>
-              <SelectContent>
-                {barbers.map((barber) => (
-                  <SelectItem key={barber.id} value={barber.id}>
-                    <div className="flex flex-col">
-                      <span>{barber.name}</span>
-                      {barber.specialty && <span className="text-xs text-muted-foreground">{barber.specialty}</span>}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           <div className="grid gap-6 md:grid-cols-2">
