@@ -96,7 +96,6 @@ export default async function DashboardPage() {
             </form>
           </div>
 
-          {/* margem superior só no mobile */}
           <div className="flex items-center gap-2 mt-3 md:mt-0">
             <Button variant="outline" asChild>
               <Link href="/">Ver site público</Link>
@@ -105,23 +104,24 @@ export default async function DashboardPage() {
         </div>
       </header>
 
-
-
       <main className="container mx-auto px-4 py-8">
-        <DashboardStats
-          todayAppointments={todayAppointments.length}
-          pendingAppointments={pendingAppointments.length}
-          todayRevenue={todayRevenue}
-          monthlyRevenue={monthlyRevenue}
-        />
-
-        <Tabs defaultValue="appointments" className="mt-8">
-          <TabsList className="grid w-full grid-cols-4">
+        <Tabs defaultValue="overview" className="mt-2">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="overview">Visão geral</TabsTrigger>
             <TabsTrigger value="appointments">Agendamentos</TabsTrigger>
             <TabsTrigger value="services">Serviços</TabsTrigger>
             <TabsTrigger value="availability">Horários</TabsTrigger>
             <TabsTrigger value="financial">Financeiro</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="overview" className="mt-6">
+            <DashboardStats
+              todayAppointments={todayAppointments.length}
+              pendingAppointments={pendingAppointments.length}
+              todayRevenue={todayRevenue}
+              monthlyRevenue={monthlyRevenue}
+            />
+          </TabsContent>
 
           <TabsContent value="appointments" className="mt-6">
             <AppointmentsList appointments={appointments || []} />
