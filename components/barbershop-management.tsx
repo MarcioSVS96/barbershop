@@ -24,7 +24,7 @@ import type { Barber } from "@/lib/types"
 interface BarbershopManagementProps {
   barbers: Barber[]
   payments: any[]
-  today: string
+  today: string // "yyyy-MM-dd"
 }
 
 export function BarbershopManagement({ barbers: initialBarbers, payments, today }: BarbershopManagementProps) {
@@ -154,9 +154,15 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
   // =========================
   // FINANCIAL CALCULATIONS
   // =========================
-  const selectedBarberPayments = payments.filter((p) => p.appointments?.barber_id === selectedBarberId)
+
+  // ✅ melhoria: memoiza o filtro (evita refiltrar a cada render)
+  const selectedBarberPayments = useMemo(
+    () => payments.filter((p) => p.appointments?.barber_id === selectedBarberId),
+    [payments, selectedBarberId],
+  )
 
   const todayDate = new Date(today)
+  const currentYear = todayDate.getFullYear()
 
   const stats = {
     today: selectedBarberPayments
@@ -177,6 +183,48 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
         .filter((p) => p.appointments?.appointment_date === format(selectedDate, "yyyy-MM-dd"))
         .reduce((acc, curr) => acc + Number(curr.amount), 0)
     : 0
+
+  // =========================
+  // MONTHLY REVENUE (CURRENT YEAR ONLY, ALL MONTHS)
+  // =========================
+  const monthlyRevenueData = useMemo(() => {
+    const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+
+    const totals = Array.from({ length: 12 }, (_, i) => ({
+      monthIndex: i,
+      monthLabel: months[i],
+      revenue: 0,
+    }))
+
+    for (const p of selectedBarberPayments) {
+      const dateStr = p?.appointments?.appointment_date
+      if (!dateStr) continue
+
+      const d = new Date(dateStr)
+      if (Number.isNaN(d.getTime())) continue
+
+      // ✅ apenas ano atual
+      if (d.getFullYear() !== currentYear) continue
+
+      const month = d.getMonth()
+      totals[month].revenue += Number(p.amount || 0)
+    }
+
+    return totals
+  }, [selectedBarberPayments, currentYear])
+
+  const totalYearRevenue = useMemo(
+    () => monthlyRevenueData.reduce((acc, item) => acc + Number(item.revenue || 0), 0),
+    [monthlyRevenueData],
+  )
+
+  const maxMonthlyRevenue = useMemo(() => {
+    const max = Math.max(...monthlyRevenueData.map((m) => Number(m.revenue || 0)))
+    return max > 0 ? max : 1 // evita divisão por zero
+  }, [monthlyRevenueData])
+
+  // ✅ altura máxima do gráfico em px (barras proporcionais reais)
+  const BAR_MAX_PX = 160
 
   // =========================
   // RENDER
@@ -356,8 +404,7 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
                 <Card className="border-muted/60 shadow-sm">
                   <CardHeader className="space-y-1">
                     <CardTitle className="text-base">
-                      Faturamento em{" "}
-                      {selectedDate ? format(selectedDate, "dd 'de' MMMM", { locale: ptBR }) : "-"}
+                      Faturamento em {selectedDate ? format(selectedDate, "dd 'de' MMMM", { locale: ptBR }) : "-"}
                     </CardTitle>
                     <CardDescription>Somatório de pagamentos na data selecionada</CardDescription>
                   </CardHeader>
@@ -369,6 +416,69 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
                   </CardContent>
                 </Card>
               </div>
+
+              {/* ✅ GRÁFICO: LUCRO MENSAL (ANO ATUAL, TODOS OS MESES, SEM LIBS) */}
+              <Card className="border-muted/60 shadow-sm">
+                <CardHeader className="space-y-1">
+                  <CardTitle className="text-base">Lucro mensal ({currentYear})</CardTitle>
+                  <CardDescription>Mostra todos os meses (Jan–Dez) e o total do ano para o barbeiro selecionado</CardDescription>
+                </CardHeader>
+
+                <CardContent>
+                  <div className="mb-4 rounded-xl border bg-muted/10 p-4">
+                    <div className="text-sm text-muted-foreground">Total no ano</div>
+                    <div className="text-2xl font-semibold">R$ {totalYearRevenue.toFixed(2)}</div>
+                  </div>
+
+                  <div className="rounded-xl border bg-muted/10 p-4">
+                    {/* MOBILE: scroll horizontal | DESKTOP: grid 12 colunas */}
+                    <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0">
+                      <div
+                        className="
+                          flex min-w-[720px] items-end gap-4
+                          md:grid md:min-w-0 md:grid-cols-12 md:gap-5
+                        "
+                        style={{ height: BAR_MAX_PX + 60 }} // espaço pra valor + label
+                      >
+                        {monthlyRevenueData.map((m) => {
+                          const revenue = Number(m.revenue || 0)
+                          const barHeightPx = Math.round((revenue / maxMonthlyRevenue) * BAR_MAX_PX)
+                          const safeHeight = Math.max(2, barHeightPx)
+
+                          return (
+                            <div key={m.monthIndex} className="flex flex-col items-center justify-end">
+                              {/* valor em cima */}
+                              <div className="mb-2 text-[11px] text-muted-foreground tabular-nums">
+                                {revenue > 0 ? `R$ ${revenue.toFixed(0)}` : "—"}
+                              </div>
+
+                              {/* área do gráfico (altura fixa) */}
+                              <div className="flex w-10 items-end justify-center" style={{ height: BAR_MAX_PX }}>
+                                {/* barra proporcional real */}
+                                <div
+                                  className="w-full rounded-lg border bg-background"
+                                  title={`${m.monthLabel}/${currentYear}: R$ ${revenue.toFixed(2)}`}
+                                  style={{
+                                    height: `${revenue > 0 ? safeHeight : 2}px`,
+                                    transition: "height 200ms ease",
+                                  }}
+                                />
+                              </div>
+
+                              {/* mês */}
+                              <div className="mt-2 text-xs text-muted-foreground">{m.monthLabel}</div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 text-xs text-muted-foreground md:hidden">
+                      No celular, deslize para o lado para ver todos os meses.
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           ) : (
             <p className="text-muted-foreground">Selecione um barbeiro para ver os dados</p>
