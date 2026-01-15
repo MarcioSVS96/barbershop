@@ -11,12 +11,16 @@ import {
   Briefcase,
   Clock,
   DollarSign,
+  Settings,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { ServiceManagement } from "@/components/service-management"
 import { AvailabilityManagement } from "@/components/availability-management"
 import { BarbershopManagement } from "@/components/barbershop-management"
+import { ProfileManagement } from "@/components/profile-management"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import type { BarbershopSettings } from "@/lib/types"
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -60,6 +64,21 @@ export default async function DashboardPage() {
     .order("day_of_week", { ascending: true })
 
   const { data: barbers } = await supabase.from("barbers").select("*").order("name", { ascending: true })
+
+  // ✅ NOVO: buscar configurações da barbearia (1 registro)
+  let settings: BarbershopSettings | null = null
+  try {
+    const { data: settingsRows } = await supabase
+      .from("barbershop_settings")
+      .select("*")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+
+    settings = (settingsRows?.[0] as BarbershopSettings) ?? null
+  } catch {
+    // se a tabela ainda não existir, não quebra o dashboard
+    settings = null
+  }
 
   // Calculate stats
   const todayAppointments = appointments?.filter((apt) => apt.appointment_date === today) || []
@@ -116,9 +135,9 @@ export default async function DashboardPage() {
         <Tabs defaultValue="overview" className="mt-2">
           {/* 
             Mobile: mostra ícones; texto aparece só na aba ativa (ao lado do ícone).
-            Desktop (md+): mostra texto sempre, layout em grid 5 colunas.
+            Desktop (md+): mostra texto sempre, layout em grid 6 colunas.
           */}
-          <TabsList className="flex w-full items-center justify-between gap-1 md:grid md:grid-cols-5 md:gap-2">
+          <TabsList className="flex w-full items-center justify-between gap-1 md:grid md:grid-cols-6 md:gap-2">
             <TabsTrigger value="overview" className="group flex items-center gap-2 px-3 md:px-4">
               <LayoutDashboard className="h-4 w-4" />
               <span className="hidden md:inline group-data-[state=active]:inline">Visão geral</span>
@@ -142,6 +161,12 @@ export default async function DashboardPage() {
             <TabsTrigger value="financial" className="group flex items-center gap-2 px-3 md:px-4">
               <DollarSign className="h-4 w-4" />
               <span className="hidden md:inline group-data-[state=active]:inline">Financeiro</span>
+            </TabsTrigger>
+
+            {/* ✅ NOVO: Perfil */}
+            <TabsTrigger value="profile" className="group flex items-center gap-2 px-3 md:px-4">
+              <Settings className="h-4 w-4" />
+              <span className="hidden md:inline group-data-[state=active]:inline">Perfil</span>
             </TabsTrigger>
           </TabsList>
 
@@ -171,6 +196,11 @@ export default async function DashboardPage() {
               <h3 className="text-lg font-semibold">Relatório Financeiro</h3>
             </div>
             <BarbershopManagement barbers={barbers || []} payments={payments || []} today={today} />
+          </TabsContent>
+
+          {/* ✅ NOVO: Conteúdo Perfil (placeholder controlado) */}
+          <TabsContent value="profile" className="mt-6">
+            <ProfileManagement settings={settings} />
           </TabsContent>
         </Tabs>
       </main>

@@ -54,3 +54,12 @@ export interface Payment {
   notes: string | null
   appointments?: Appointment
 }
+
+export interface BarbershopSettings {
+  id: string
+  name: string
+  description: string | null
+  logo_url: string | null
+  hero_background_url: string | null
+  updated_at: string
+}

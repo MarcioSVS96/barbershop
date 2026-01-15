@@ -170,14 +170,12 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
       const endTime = addMinutes(slotTime, service.duration)
       if (endTime > closingTime) return false
 
-      // ✅ NOVO: se for HOJE, remove horários que já passaram (com margem)
+      // ✅ se for HOJE, remove horários que já passaram (com margem)
       if (isSameDay(date, now)) {
-        // monta um Date real com o dia selecionado + hora do slot
         const slotDateTime = new Date(date)
         const [hh, mm] = slot.split(":").map((n) => Number(n))
         slotDateTime.setHours(hh, mm, 0, 0)
 
-        // se já passou (ou está muito próximo), bloqueia
         if (slotDateTime <= cutoffNow) return false
       }
 
@@ -287,12 +285,18 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Novo Agendamento</CardTitle>
-        <CardDescription>Preencha os dados abaixo para agendar seu horário</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <Card
+      className={[
+        // ✅ GLASSMORPHISM (vidro)
+        "border-white/15 bg-background/40 backdrop-blur-xl shadow-xl",
+        "supports-backdrop-filter:bg-background/30",
+        "dark:border-white/10 dark:bg-background/30",
+        // ✅ estética premium
+        "rounded-2xl overflow-hidden",
+      ].join(" ")}
+    >
+
+      <CardContent className="p-6 sm:p-8">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2">
             <div className="space-y-2">
@@ -375,7 +379,11 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
               <Label>Data</Label>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left font-normal bg-transparent" type="button">
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal bg-transparent"
+                    type="button"
+                  >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {selectedDate ? format(selectedDate, "PPP", { locale: ptBR }) : "Selecione a data"}
                   </Button>
