@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
 
 import { createClient } from "@/lib/supabase/client"
 import { useToast } from "@/hooks/use-toast"
@@ -28,6 +29,20 @@ interface BarbershopManagementProps {
   today: string // "yyyy-MM-dd"
 }
 
+const statusColors: Record<string, string> = {
+  pending: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
+  confirmed: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+  completed: "bg-green-500/10 text-green-500 border-green-500/20",
+  cancelled: "bg-red-500/10 text-red-500 border-red-500/20",
+}
+
+const statusLabels: Record<string, string> = {
+  pending: "Pendente",
+  confirmed: "Confirmado",
+  completed: "Concluído",
+  cancelled: "Cancelado",
+}
+
 export function BarbershopManagement({ barbers: initialBarbers, payments, today }: BarbershopManagementProps) {
   const router = useRouter()
 
@@ -40,6 +55,10 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
   const [newBarberName, setNewBarberName] = useState("")
   const [newBarberSpecialty, setNewBarberSpecialty] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+
+  // ✅ NOVO: agendamentos do dia selecionado
+  const [selectedDateAppointments, setSelectedDateAppointments] = useState<any[]>([])
+  const [isLoadingAppointments, setIsLoadingAppointments] = useState(false)
 
   const { toast } = useToast()
   const supabase = createClient()
@@ -62,7 +81,6 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
         specialty: newBarberSpecialty || null,
       }
 
-      // UPDATE
       if (editingBarber) {
         const { error } = await supabase.from("barbers").update(barberData).eq("id", editingBarber.id)
         if (error) throw error
@@ -73,11 +91,8 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
           title: "Barbeiro atualizado",
           description: "As informações foram atualizadas com sucesso.",
         })
-      }
-      // CREATE
-      else {
+      } else {
         const { data, error } = await supabase.from("barbers").insert(barberData).select().single()
-
         if (error) throw error
         if (!data) throw new Error("Erro ao criar barbeiro")
 
@@ -98,7 +113,6 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
       setEditingBarber(null)
       setIsDialogOpen(false)
 
-      // ✅ Atualiza dados do Server Component (sem F5)
       router.refresh()
     } catch (error: any) {
       console.error("Error saving barber:", error)
@@ -135,7 +149,6 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
         description: "O barbeiro foi removido com sucesso.",
       })
 
-      // ✅ Atualiza dados do Server Component (sem F5)
       router.refresh()
     } catch (error) {
       console.error("Error deleting barber:", error)
@@ -166,7 +179,6 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
   // =========================
   // FINANCIAL CALCULATIONS
   // =========================
-
   const selectedBarberPayments = useMemo(
     () => payments.filter((p) => p.appointments?.barber_id === selectedBarberId),
     [payments, selectedBarberId],
@@ -189,11 +201,49 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
       .reduce((acc, curr) => acc + Number(curr.amount), 0),
   }
 
-  const selectedDateRevenue = selectedDate
+  const selectedDateStr = useMemo(() => (selectedDate ? format(selectedDate, "yyyy-MM-dd") : null), [selectedDate])
+
+  const selectedDateRevenue = selectedDateStr
     ? selectedBarberPayments
-        .filter((p) => p.appointments?.appointment_date === format(selectedDate, "yyyy-MM-dd"))
+        .filter((p) => p.appointments?.appointment_date === selectedDateStr)
         .reduce((acc, curr) => acc + Number(curr.amount), 0)
     : 0
+
+  // ✅ NOVO: buscar agendamentos do dia selecionado (do barbeiro selecionado)
+  useEffect(() => {
+    const run = async () => {
+      if (!selectedBarberId || !selectedDateStr) {
+        setSelectedDateAppointments([])
+        return
+      }
+
+      setIsLoadingAppointments(true)
+      try {
+        const { data, error } = await supabase
+          .from("appointments")
+          .select(
+            `
+            *,
+            clients(*),
+            services(*)
+          `,
+          )
+          .eq("barber_id", selectedBarberId)
+          .eq("appointment_date", selectedDateStr)
+          .order("appointment_time", { ascending: true })
+
+        if (error) throw error
+        setSelectedDateAppointments(data || [])
+      } catch (e) {
+        console.error("Error fetching selected day appointments:", e)
+        setSelectedDateAppointments([])
+      } finally {
+        setIsLoadingAppointments(false)
+      }
+    }
+
+    run()
+  }, [supabase, selectedBarberId, selectedDateStr])
 
   // =========================
   // MONTHLY REVENUE (CURRENT YEAR ONLY, ALL MONTHS)
@@ -213,7 +263,6 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
 
       const d = new Date(dateStr)
       if (Number.isNaN(d.getTime())) continue
-
       if (d.getFullYear() !== currentYear) continue
 
       const month = d.getMonth()
@@ -399,7 +448,7 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
                       <CalendarIcon className="h-4 w-4 text-muted-foreground" />
                       Selecione uma data
                     </CardTitle>
-                    <CardDescription>Veja o faturamento no dia escolhido</CardDescription>
+                    <CardDescription>Veja o faturamento e os agendamentos no dia escolhido</CardDescription>
                   </CardHeader>
 
                   <CardContent className="flex justify-center">
@@ -409,17 +458,56 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
                   </CardContent>
                 </Card>
 
+                {/* ✅ AQUI: valor + agendamentos do dia */}
                 <Card className="border-muted/60 shadow-sm">
                   <CardHeader className="space-y-1">
                     <CardTitle className="text-base">
                       Faturamento em {selectedDate ? format(selectedDate, "dd 'de' MMMM", { locale: ptBR }) : "-"}
                     </CardTitle>
-                    <CardDescription>Somatório de pagamentos na data selecionada</CardDescription>
+                    <CardDescription>Somatório de pagamentos e lista de agendamentos do dia</CardDescription>
                   </CardHeader>
+
                   <CardContent>
                     <div className="rounded-xl border bg-muted/10 p-6">
                       <div className="text-sm text-muted-foreground mb-2">Total</div>
                       <div className="text-4xl font-semibold tracking-tight">R$ {selectedDateRevenue.toFixed(2)}</div>
+
+                      <div className="mt-5 border-t pt-4">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-medium">Agendamentos do dia</div>
+                          <Badge variant="outline">{selectedDateAppointments.length}</Badge>
+                        </div>
+
+                        {isLoadingAppointments ? (
+                          <p className="mt-3 text-sm text-muted-foreground">Carregando agendamentos...</p>
+                        ) : selectedDateAppointments.length === 0 ? (
+                          <p className="mt-3 text-sm text-muted-foreground">Nenhum agendamento encontrado nessa data.</p>
+                        ) : (
+                          <div className="mt-3 space-y-2">
+                            {selectedDateAppointments.map((apt) => (
+                              <div key={apt.id} className="rounded-lg border bg-background p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="font-medium">{apt.appointment_time}</div>
+                                  <Badge variant="outline" className={statusColors[apt.status] || ""}>
+                                    {statusLabels[apt.status] || apt.status}
+                                  </Badge>
+                                </div>
+
+                                <div className="mt-1 text-sm">
+                                  <span className="font-medium">{apt.clients?.name ?? "Cliente"}</span>
+                                  {apt.clients?.phone ? <span className="text-muted-foreground"> • {apt.clients.phone}</span> : null}
+                                </div>
+
+                                <div className="mt-1 text-sm text-muted-foreground">
+                                  {apt.services?.name ?? "Serviço"} • R$ {Number(apt.service_price_at_booking || 0).toFixed(2)}
+                                </div>
+
+                                {apt.notes ? <div className="mt-1 text-xs text-muted-foreground">Obs: {apt.notes}</div> : null}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
