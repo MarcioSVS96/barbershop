@@ -192,15 +192,12 @@ export default async function DashboardPage() {
           </TabsContent>
 
           <TabsContent value="financial" className="mt-6">
-            <div className="mb-4 rounded-lg border bg-card p-6">
-              <h3 className="text-lg font-semibold">Relatório Financeiro</h3>
-            </div>
             <BarbershopManagement barbers={barbers || []} payments={payments || []} today={today} />
           </TabsContent>
 
           {/* ✅ NOVO: Conteúdo Perfil (placeholder controlado) */}
           <TabsContent value="profile" className="mt-6">
-            <ProfileManagement settings={settings} />
+            <ProfileManagement settings={settings} barbers={barbers || []} />
           </TabsContent>
         </Tabs>
       </main>
