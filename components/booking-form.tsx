@@ -323,17 +323,6 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email">Email (opcional)</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="seu@email.com"
-              value={clientEmail}
-              onChange={(e) => setClientEmail(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="barber">Barbeiro</Label>
             <Select value={selectedBarber} onValueChange={handleBarberChange} required>
               <SelectTrigger id="barber">

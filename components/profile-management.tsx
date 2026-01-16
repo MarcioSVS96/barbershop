@@ -38,6 +38,13 @@ function downloadFile(url: string, filename: string) {
   a.remove()
 }
 
+function withCacheBuster(url: string, v?: number) {
+  if (!url) return ""
+  if (!v) return url
+  const hasQuery = url.includes("?")
+  return `${url}${hasQuery ? "&" : "?"}v=${v}`
+}
+
 export function ProfileManagement({ settings }: ProfileManagementProps) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -47,17 +54,27 @@ export function ProfileManagement({ settings }: ProfileManagementProps) {
   const [isUploadingLogo, setIsUploadingLogo] = useState(false)
   const [isUploadingHero, setIsUploadingHero] = useState(false)
 
+  // ✅ cache buster para evitar preview "preso" no cache
+  const [logoBust, setLogoBust] = useState<number>(0)
+  const [heroBust, setHeroBust] = useState<number>(0)
+
   const [name, setName] = useState(settings?.name || "")
   const [description, setDescription] = useState(settings?.description || "")
   const [logoUrl, setLogoUrl] = useState(settings?.logo_url || "")
   const [heroBackgroundUrl, setHeroBackgroundUrl] = useState(settings?.hero_background_url || "")
 
+  // ✅ Correção importante:
+  // Antes dependia só do settings?.id (que não muda). Agora também reage ao updated_at.
   useEffect(() => {
     setName(settings?.name || "")
     setDescription(settings?.description || "")
     setLogoUrl(settings?.logo_url || "")
     setHeroBackgroundUrl(settings?.hero_background_url || "")
-  }, [settings?.id])
+
+    // reseta cache-buster quando vier do server (nova versão salva)
+    setLogoBust(0)
+    setHeroBust(0)
+  }, [settings?.id, (settings as any)?.updated_at])
 
   const hasChanges =
     name !== (settings?.name || "") ||
@@ -69,11 +86,17 @@ export function ProfileManagement({ settings }: ProfileManagementProps) {
     if (!file.type.startsWith("image/")) throw new Error("Envie apenas imagens")
 
     const ext = safeExt(file)
+
+    // Observação:
+    // Você está usando path com extensão variável.
+    // Isso é OK, mas pode deixar arquivos antigos no bucket (logo.png, logo.jpg etc).
+    // O cache-buster resolve o "preview preso".
     const path = `profile/${type}.${ext}`
 
     const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
       upsert: true,
       contentType: file.type,
+      cacheControl: "3600",
     })
 
     if (error) throw error
@@ -90,10 +113,12 @@ export function ProfileManagement({ settings }: ProfileManagementProps) {
     setIsUploadingLogo(true)
     try {
       const url = await uploadImage(file, "logo")
-      setLogoUrl(url) // ✅ só estado local
+      setLogoUrl(url)
+      setLogoBust(Date.now()) // ✅ força atualizar preview (cache-buster)
+
       toast({ title: "Logo enviada", description: "Preview atualizado. Clique em salvar para aplicar." })
     } catch (err: any) {
-      toast({ title: "Erro", description: err.message, variant: "destructive" })
+      toast({ title: "Erro", description: err?.message || "Falha ao enviar logo.", variant: "destructive" })
     } finally {
       setIsUploadingLogo(false)
     }
@@ -107,10 +132,12 @@ export function ProfileManagement({ settings }: ProfileManagementProps) {
     setIsUploadingHero(true)
     try {
       const url = await uploadImage(file, "hero")
-      setHeroBackgroundUrl(url) // ✅ só estado local
+      setHeroBackgroundUrl(url)
+      setHeroBust(Date.now()) // ✅ força atualizar preview (cache-buster)
+
       toast({ title: "Background enviado", description: "Preview atualizado. Clique em salvar para aplicar." })
     } catch (err: any) {
-      toast({ title: "Erro", description: err.message, variant: "destructive" })
+      toast({ title: "Erro", description: err?.message || "Falha ao enviar background.", variant: "destructive" })
     } finally {
       setIsUploadingHero(false)
     }
@@ -140,13 +167,22 @@ export function ProfileManagement({ settings }: ProfileManagementProps) {
       }
 
       toast({ title: "Perfil salvo", description: "As configurações foram aplicadas com sucesso." })
+
+      // ✅ refresh para recarregar settings no server
       router.refresh()
     } catch (err: any) {
-      toast({ title: "Erro ao salvar", description: err.message, variant: "destructive" })
+      toast({
+        title: "Erro ao salvar",
+        description: err?.message || "Não foi possível salvar as configurações.",
+        variant: "destructive",
+      })
     } finally {
       setIsSaving(false)
     }
   }
+
+  const logoPreviewSrc = withCacheBuster(logoUrl, logoBust || undefined)
+  const heroPreviewSrc = withCacheBuster(heroBackgroundUrl, heroBust || undefined)
 
   return (
     <Card className="border-muted/60 shadow-sm">
@@ -208,7 +244,7 @@ export function ProfileManagement({ settings }: ProfileManagementProps) {
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={logoUrl}
+                src={logoPreviewSrc}
                 alt="Preview da logo"
                 className="h-24 w-24 rounded-lg border bg-background object-cover"
               />
@@ -258,7 +294,7 @@ export function ProfileManagement({ settings }: ProfileManagementProps) {
             {heroBackgroundUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={heroBackgroundUrl}
+                src={heroPreviewSrc}
                 alt="Preview do background"
                 className="h-40 w-full rounded-lg border bg-background object-cover"
               />
