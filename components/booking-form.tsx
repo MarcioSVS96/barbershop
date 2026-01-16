@@ -314,7 +314,7 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
               <Label htmlFor="phone">Telefone</Label>
               <Input
                 id="phone"
-                placeholder="(11) 98765-4321"
+                placeholder="(81) 98765-4321"
                 value={clientPhone}
                 onChange={(e) => setClientPhone(e.target.value)}
                 required
