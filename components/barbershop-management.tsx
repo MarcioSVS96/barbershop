@@ -1,6 +1,5 @@
 "use client"
 
-import type React from "react"
 import { useEffect, useMemo, useState } from "react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,6 +17,7 @@ import { Calendar } from "@/components/ui/calendar"
 import type { Barber } from "@/lib/types"
 
 interface BarbershopManagementProps {
+  barbershopId: string
   barbers: Barber[]
   payments: any[]
   today: string // "yyyy-MM-dd"
@@ -37,7 +37,12 @@ const statusLabels: Record<string, string> = {
   cancelled: "Cancelado",
 }
 
-export function BarbershopManagement({ barbers: initialBarbers, payments, today }: BarbershopManagementProps) {
+export function BarbershopManagement({
+  barbershopId,
+  barbers: initialBarbers,
+  payments,
+  today,
+}: BarbershopManagementProps) {
   const [barbers, setBarbers] = useState<Barber[]>(initialBarbers)
   const [selectedBarberId, setSelectedBarberId] = useState<string>(initialBarbers.length > 0 ? initialBarbers[0].id : "")
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
@@ -93,7 +98,7 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
   // buscar agendamentos do dia selecionado (do barbeiro selecionado)
   useEffect(() => {
     const run = async () => {
-      if (!selectedBarberId || !selectedDateStr) {
+      if (!barbershopId || !selectedBarberId || !selectedDateStr) {
         setSelectedDateAppointments([])
         return
       }
@@ -109,6 +114,7 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
             services(*)
           `,
           )
+          .eq("barbershop_id", barbershopId) // ✅ multi-tenant
           .eq("barber_id", selectedBarberId)
           .eq("appointment_date", selectedDateStr)
           .order("appointment_time", { ascending: true })
@@ -124,7 +130,7 @@ export function BarbershopManagement({ barbers: initialBarbers, payments, today 
     }
 
     run()
-  }, [supabase, selectedBarberId, selectedDateStr])
+  }, [supabase, barbershopId, selectedBarberId, selectedDateStr])
 
   // MONTHLY REVENUE (CURRENT YEAR ONLY, ALL MONTHS)
   const monthlyRevenueData = useMemo(() => {

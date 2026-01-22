@@ -1,3 +1,4 @@
+// C:\Projetos\barbershop\components\profile-management.tsx
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
@@ -16,8 +17,9 @@ import type { BarbershopSettings, Barber } from "@/lib/types"
 import { Edit, Plus, Trash2, UserRound } from "lucide-react"
 
 interface ProfileManagementProps {
+  barbershopId: string // ✅ necessário para multi-tenant (storage e settings)
   settings: BarbershopSettings | null
-  barbers: Barber[] // ✅ novo: vem do server (app/barbeiro/page.tsx)
+  barbers: Barber[]
 }
 
 const BUCKET = "barbershop-assets"
@@ -48,7 +50,7 @@ function withCacheBuster(url: string, v?: number) {
   return `${url}${hasQuery ? "&" : "?"}v=${v}`
 }
 
-export function ProfileManagement({ settings, barbers: initialBarbers }: ProfileManagementProps) {
+export function ProfileManagement({ barbershopId, settings, barbers: initialBarbers }: ProfileManagementProps) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const { toast } = useToast()
@@ -83,11 +85,17 @@ export function ProfileManagement({ settings, barbers: initialBarbers }: Profile
     logoUrl !== (settings?.logo_url || "") ||
     heroBackgroundUrl !== (settings?.hero_background_url || "")
 
+  // ✅ multi-tenant storage path
+  function storagePath(type: "logo" | "hero", ext: string) {
+    return `shops/${barbershopId}/profile/${type}.${ext}`
+  }
+
   async function uploadImage(file: File, type: "logo" | "hero") {
     if (!file.type.startsWith("image/")) throw new Error("Envie apenas imagens")
+    if (!barbershopId) throw new Error("barbershopId ausente")
 
     const ext = safeExt(file)
-    const path = `profile/${type}.${ext}`
+    const path = storagePath(type, ext)
 
     const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
       upsert: true,
@@ -151,13 +159,9 @@ export function ProfileManagement({ settings, barbers: initialBarbers }: Profile
         hero_background_url: heroBackgroundUrl || null,
       }
 
-      if (settings?.id) {
-        const { error } = await supabase.from("barbershop_settings").update(payload).eq("id", settings.id)
-        if (error) throw error
-      } else {
-        const { error } = await supabase.from("barbershop_settings").insert(payload)
-        if (error) throw error
-      }
+      // ✅ update do registro da barbearia (tenantId == barbershopId)
+      const { error } = await supabase.from("barbershop_settings").update(payload).eq("id", barbershopId)
+      if (error) throw error
 
       toast({ title: "Perfil salvo", description: "As configurações foram aplicadas com sucesso." })
       router.refresh()
@@ -212,10 +216,17 @@ export function ProfileManagement({ settings, barbers: initialBarbers }: Profile
       const barberData = {
         name: newBarberName.trim(),
         specialty: newBarberSpecialty.trim() || null,
+        barbershop_id: barbershopId, // ✅ multi-tenant
       }
 
       if (editingBarber) {
-        const { error } = await supabase.from("barbers").update(barberData).eq("id", editingBarber.id)
+        // ✅ protege multi-tenant: atualiza apenas se pertencer a esta barbearia
+        const { error } = await supabase
+          .from("barbers")
+          .update(barberData)
+          .eq("id", editingBarber.id)
+          .eq("barbershop_id", barbershopId)
+
         if (error) throw error
 
         setBarbers((prev) => prev.map((b) => (b.id === editingBarber.id ? { ...b, ...barberData } : b)))
@@ -254,7 +265,13 @@ export function ProfileManagement({ settings, barbers: initialBarbers }: Profile
 
     setIsSavingBarber(true)
     try {
-      const { error } = await supabase.from("barbers").delete().eq("id", id)
+      // ✅ protege multi-tenant: deleta apenas se pertencer a esta barbearia
+      const { error } = await supabase
+        .from("barbers")
+        .delete()
+        .eq("id", id)
+        .eq("barbershop_id", barbershopId)
+
       if (error) throw error
 
       setBarbers((prev) => prev.filter((b) => b.id !== id))
@@ -275,7 +292,7 @@ export function ProfileManagement({ settings, barbers: initialBarbers }: Profile
 
   return (
     <div className="space-y-6">
-      {/* ✅ GERENCIAR BARBEIROS (agora na aba Perfil) */}
+      {/* ✅ GERENCIAR BARBEIROS */}
       <Card className="border-muted/60 shadow-sm">
         <CardHeader className="space-y-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -347,7 +364,12 @@ export function ProfileManagement({ settings, barbers: initialBarbers }: Profile
                 </div>
 
                 <div className="flex shrink-0 gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => openEditBarberDialog(barber)} disabled={isSavingBarber}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => openEditBarberDialog(barber)}
+                    disabled={isSavingBarber}
+                  >
                     <Edit className="h-4 w-4" />
                   </Button>
 

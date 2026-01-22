@@ -1,24 +1,18 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
+
 import { useToast } from "@/hooks/use-toast"
 import { createClient } from "@/lib/supabase/client"
 import { Plus, Edit, Clock, DollarSign, Trash2 } from "lucide-react"
@@ -26,12 +20,20 @@ import type { Service } from "@/lib/types"
 
 interface ServiceManagementProps {
   services: Service[]
+  barbershopId: string
 }
 
-export function ServiceManagement({ services: initialServices }: ServiceManagementProps) {
+/**
+ * ✅ Named export
+ * Use: import { ServiceManagement } from "@/components/service-management"
+ */
+export function ServiceManagement({ services: initialServices, barbershopId }: ServiceManagementProps) {
   const router = useRouter()
+  const { toast } = useToast()
 
-  const [services, setServices] = useState(initialServices)
+  const supabase = useMemo(() => createClient(), [])
+  const [services, setServices] = useState<Service[]>(initialServices)
+
   const [isLoading, setIsLoading] = useState(false)
   const [editingService, setEditingService] = useState<Service | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -42,8 +44,9 @@ export function ServiceManagement({ services: initialServices }: ServiceManageme
   const [duration, setDuration] = useState("")
   const [description, setDescription] = useState("")
 
-  const { toast } = useToast()
-  const supabase = createClient()
+  useEffect(() => {
+    setServices(initialServices)
+  }, [initialServices])
 
   const resetForm = () => {
     setName("")
@@ -60,62 +63,83 @@ export function ServiceManagement({ services: initialServices }: ServiceManageme
 
   const openEditDialog = (service: Service) => {
     setEditingService(service)
-    setName(service.name)
-    setPrice(service.price.toString())
-    setDuration(service.duration.toString())
-    setDescription(service.description || "")
+    setName(service.name ?? "")
+    setPrice(String(service.price ?? ""))
+    setDuration(String(service.duration ?? ""))
+    setDescription(service.description ?? "")
     setIsDialogOpen(true)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
 
+    if (!barbershopId) {
+      toast({
+        title: "Erro de contexto",
+        description: "Barbearia não identificada (barbershopId ausente).",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!name.trim()) {
+      toast({ title: "Nome obrigatório", description: "Informe o nome do serviço.", variant: "destructive" })
+      return
+    }
+
+    const parsedPrice = Number.parseFloat(price)
+    const parsedDuration = Number.parseInt(duration, 10)
+
+    if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
+      toast({ title: "Preço inválido", description: "Informe um preço válido.", variant: "destructive" })
+      return
+    }
+
+    if (Number.isNaN(parsedDuration) || parsedDuration <= 0) {
+      toast({ title: "Duração inválida", description: "Informe uma duração válida.", variant: "destructive" })
+      return
+    }
+
+    setIsLoading(true)
     try {
-      const serviceData = {
-        name,
-        price: Number.parseFloat(price),
-        duration: Number.parseInt(duration),
-        description: description || null,
-        is_active: true,
+      const baseData = {
+        barbershop_id: barbershopId,
+        name: name.trim(),
+        price: parsedPrice,
+        duration: parsedDuration,
+        description: description.trim() || null,
       }
 
       if (editingService) {
-        // Update existing service
-        const { error } = await supabase.from("services").update(serviceData).eq("id", editingService.id)
+        const { error } = await supabase
+          .from("services")
+          .update(baseData)
+          .eq("id", editingService.id)
+          .eq("barbershop_id", barbershopId)
 
         if (error) throw error
 
-        setServices((prev) => prev.map((s) => (s.id === editingService.id ? { ...s, ...serviceData } : s)))
+        setServices((prev) => prev.map((s) => (s.id === editingService.id ? { ...s, ...baseData } : s)))
 
-        toast({
-          title: "Serviço atualizado",
-          description: "O serviço foi atualizado com sucesso.",
-        })
+        toast({ title: "Serviço atualizado", description: "O serviço foi atualizado com sucesso." })
       } else {
-        // Create new service
-        const { data, error } = await supabase.from("services").insert(serviceData).select().single()
+        const payload = { ...baseData, is_active: true }
 
+        const { data, error } = await supabase.from("services").insert(payload).select().single()
         if (error) throw error
 
         setServices((prev) => [...prev, data])
-
-        toast({
-          title: "Serviço criado",
-          description: "O novo serviço foi criado com sucesso.",
-        })
+        toast({ title: "Serviço criado", description: "O novo serviço foi criado com sucesso." })
       }
 
       setIsDialogOpen(false)
       resetForm()
-
-      // ✅ Atualiza dados do Server Component (sem F5)
       router.refresh()
-    } catch (error) {
-      console.error("[v0] Service error:", error)
+    } catch (error: any) {
+      console.error("[ServiceManagement] save error:", error)
       toast({
         title: "Erro",
-        description: "Não foi possível salvar o serviço.",
+        description: error?.message || "Não foi possível salvar o serviço.",
         variant: "destructive",
       })
     } finally {
@@ -124,9 +148,14 @@ export function ServiceManagement({ services: initialServices }: ServiceManageme
   }
 
   const toggleServiceStatus = async (serviceId: string, currentStatus: boolean) => {
+    if (!barbershopId) return
     setIsLoading(true)
     try {
-      const { error } = await supabase.from("services").update({ is_active: !currentStatus }).eq("id", serviceId)
+      const { error } = await supabase
+        .from("services")
+        .update({ is_active: !currentStatus })
+        .eq("id", serviceId)
+        .eq("barbershop_id", barbershopId)
 
       if (error) throw error
 
@@ -139,13 +168,12 @@ export function ServiceManagement({ services: initialServices }: ServiceManageme
           : "O serviço está disponível para agendamentos.",
       })
 
-      // ✅ Atualiza dados do Server Component (sem F5)
       router.refresh()
-    } catch (error) {
-      console.error("[v0] Toggle service error:", error)
+    } catch (error: any) {
+      console.error("[ServiceManagement] toggle error:", error)
       toast({
         title: "Erro",
-        description: "Não foi possível alterar o status do serviço.",
+        description: error?.message || "Não foi possível alterar o status do serviço.",
         variant: "destructive",
       })
     } finally {
@@ -154,28 +182,23 @@ export function ServiceManagement({ services: initialServices }: ServiceManageme
   }
 
   const deleteService = async (serviceId: string) => {
+    if (!barbershopId) return
     if (!confirm("Tem certeza que deseja excluir este serviço?")) return
 
     setIsLoading(true)
     try {
-      const { error } = await supabase.from("services").delete().eq("id", serviceId)
-
+      const { error } = await supabase.from("services").delete().eq("id", serviceId).eq("barbershop_id", barbershopId)
       if (error) throw error
 
       setServices((prev) => prev.filter((s) => s.id !== serviceId))
 
-      toast({
-        title: "Serviço excluído",
-        description: "O serviço foi removido com sucesso.",
-      })
-
-      // ✅ Atualiza dados do Server Component (sem F5)
+      toast({ title: "Serviço excluído", description: "O serviço foi removido com sucesso." })
       router.refresh()
-    } catch (error) {
-      console.error("[v0] Delete service error:", error)
+    } catch (error: any) {
+      console.error("[ServiceManagement] delete error:", error)
       toast({
         title: "Erro ao excluir",
-        description: "Não foi possível excluir o serviço. Verifique se há agendamentos vinculados.",
+        description: error?.message || "Não foi possível excluir o serviço. Verifique se há agendamentos vinculados.",
         variant: "destructive",
       })
     } finally {
@@ -191,6 +214,7 @@ export function ServiceManagement({ services: initialServices }: ServiceManageme
             <CardTitle>Gestão de Serviços</CardTitle>
             <CardDescription>Gerencie os serviços oferecidos pela barbearia</CardDescription>
           </div>
+
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={openCreateDialog}>
@@ -198,6 +222,7 @@ export function ServiceManagement({ services: initialServices }: ServiceManageme
                 Novo Serviço
               </Button>
             </DialogTrigger>
+
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>{editingService ? "Editar Serviço" : "Novo Serviço"}</DialogTitle>
@@ -207,6 +232,7 @@ export function ServiceManagement({ services: initialServices }: ServiceManageme
                     : "Crie um novo serviço para oferecer aos clientes."}
                 </DialogDescription>
               </DialogHeader>
+
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Nome do Serviço</Label>
@@ -265,6 +291,7 @@ export function ServiceManagement({ services: initialServices }: ServiceManageme
           </Dialog>
         </div>
       </CardHeader>
+
       <CardContent>
         <div className="space-y-4">
           {services.map((service) => (
@@ -272,15 +299,15 @@ export function ServiceManagement({ services: initialServices }: ServiceManageme
               <div className="flex-1 space-y-1">
                 <div className="flex items-center gap-2">
                   <h4 className="font-semibold">{service.name}</h4>
-                  <Badge variant={service.is_active ? "default" : "secondary"}>
-                    {service.is_active ? "Ativo" : "Inativo"}
-                  </Badge>
+                  <Badge variant={service.is_active ? "default" : "secondary"}>{service.is_active ? "Ativo" : "Inativo"}</Badge>
                 </div>
+
                 {service.description && <p className="text-sm text-muted-foreground">{service.description}</p>}
+
                 <div className="flex items-center gap-4 text-sm">
                   <div className="flex items-center gap-1 text-muted-foreground">
                     <DollarSign className="h-4 w-4" />
-                    <span>R$ {service.price.toFixed(2)}</span>
+                    <span>R$ {Number(service.price || 0).toFixed(2)}</span>
                   </div>
                   <div className="flex items-center gap-1 text-muted-foreground">
                     <Clock className="h-4 w-4" />
@@ -293,12 +320,14 @@ export function ServiceManagement({ services: initialServices }: ServiceManageme
                 <Button size="sm" variant="outline" onClick={() => openEditDialog(service)} disabled={isLoading}>
                   <Edit className="h-4 w-4" />
                 </Button>
+
                 <Button size="sm" variant="outline" onClick={() => deleteService(service.id)} disabled={isLoading}>
                   <Trash2 className="h-4 w-4 text-red-500" />
                 </Button>
+
                 <Switch
-                  checked={service.is_active}
-                  onCheckedChange={() => toggleServiceStatus(service.id, service.is_active)}
+                  checked={!!service.is_active}
+                  onCheckedChange={() => toggleServiceStatus(service.id, !!service.is_active)}
                   disabled={isLoading}
                 />
               </div>

@@ -20,6 +20,7 @@ import { Check, X, DollarSign, Calendar as CalendarIcon } from "lucide-react"
 
 interface AppointmentsListProps {
   appointments: Appointment[]
+  barbershopId: string
 }
 
 const statusColors = {
@@ -38,7 +39,7 @@ const statusLabels = {
 
 type QuickFilter = "today" | "tomorrow" | "next7" | "all" | "date"
 
-export function AppointmentsList({ appointments: initialAppointments }: AppointmentsListProps) {
+export function AppointmentsList({ appointments: initialAppointments, barbershopId }: AppointmentsListProps) {
   const router = useRouter()
 
   const [appointments, setAppointments] = useState(initialAppointments)
@@ -54,30 +55,31 @@ export function AppointmentsList({ appointments: initialAppointments }: Appointm
   const { toast } = useToast()
   const supabase = createClient()
 
-  const today = useMemo(() => new Date(), [])
   const todayStr = useMemo(() => format(new Date(), "yyyy-MM-dd"), [])
   const tomorrowStr = useMemo(() => format(addDays(new Date(), 1), "yyyy-MM-dd"), [])
 
   const updateStatus = async (appointmentId: string, newStatus: "confirmed" | "completed" | "cancelled") => {
+    if (!barbershopId) return
+
     setIsLoading(true)
     try {
-      const { error } = await supabase.from("appointments").update({ status: newStatus }).eq("id", appointmentId)
+      const { error } = await supabase
+        .from("appointments")
+        .update({ status: newStatus })
+        .eq("id", appointmentId)
+        .eq("barbershop_id", barbershopId)
+
       if (error) throw error
 
       setAppointments((prev) => prev.map((apt) => (apt.id === appointmentId ? { ...apt, status: newStatus } : apt)))
 
-      toast({
-        title: "Status atualizado",
-        description: "O agendamento foi atualizado com sucesso.",
-      })
-
-      // ✅ Atualiza dados do Server Component (sem F5)
+      toast({ title: "Status atualizado", description: "O agendamento foi atualizado com sucesso." })
       router.refresh()
-    } catch (error) {
-      console.error("[v0] Update status error:", error)
+    } catch (error: any) {
+      console.error("[AppointmentsList] Update status error:", error)
       toast({
         title: "Erro ao atualizar",
-        description: "Não foi possível atualizar o status.",
+        description: error?.message || "Não foi possível atualizar o status.",
         variant: "destructive",
       })
     } finally {
@@ -86,27 +88,33 @@ export function AppointmentsList({ appointments: initialAppointments }: Appointm
   }
 
   const addPayment = async (appointmentId: string) => {
+    if (!barbershopId) return
+
     setIsLoading(true)
     try {
       const appointment = appointments.find((apt) => apt.id === appointmentId)
       if (!appointment) throw new Error("Agendamento não encontrado")
 
-      const amount = paymentAmount ? Number.parseFloat(paymentAmount) : appointment.service_price_at_booking
-      const barberCommission = amount * 0.6
-      const barbershopRevenue = amount * 0.4
+      const base = Number(appointment.service_price_at_booking || 0)
+      const amount = paymentAmount ? Number.parseFloat(paymentAmount) : base
+      if (Number.isNaN(amount) || amount <= 0) throw new Error("Valor inválido")
+
+      const barberCommission = Number((amount * 0.6).toFixed(2))
+      const barbershopRevenue = Number((amount * 0.4).toFixed(2))
 
       const { error } = await supabase.from("payments").insert({
+        barbershop_id: barbershopId,
         appointment_id: appointmentId,
         amount,
         payment_method: paymentMethod,
         barber_commission: barberCommission,
         barbershop_revenue: barbershopRevenue,
-        payment_date: appointment.appointment_date,
+        // deixe o banco preencher, ou use timestamp real:
+        // payment_date: new Date().toISOString(),
       })
 
       if (error) throw error
 
-      // ✅ Atualiza localmente e no banco
       await updateStatus(appointmentId, "completed")
 
       toast({
@@ -116,14 +124,12 @@ export function AppointmentsList({ appointments: initialAppointments }: Appointm
 
       setPaymentDialog(null)
       setPaymentAmount("")
-
-      // ✅ Garante refresh do dashboard (pagamentos/estatísticas)
       router.refresh()
-    } catch (error) {
-      console.error("[v0] Payment error:", error)
+    } catch (error: any) {
+      console.error("[AppointmentsList] Payment error:", error)
       toast({
         title: "Erro ao registrar pagamento",
-        description: "Não foi possível registrar o pagamento.",
+        description: error?.message || "Não foi possível registrar o pagamento.",
         variant: "destructive",
       })
     } finally {
@@ -131,17 +137,11 @@ export function AppointmentsList({ appointments: initialAppointments }: Appointm
     }
   }
 
-  // ✅ aplica filtro no array inteiro antes de agrupar
   const filteredAppointments = useMemo(() => {
     if (quickFilter === "all") return appointments
 
-    if (quickFilter === "today") {
-      return appointments.filter((apt) => apt.appointment_date === todayStr)
-    }
-
-    if (quickFilter === "tomorrow") {
-      return appointments.filter((apt) => apt.appointment_date === tomorrowStr)
-    }
+    if (quickFilter === "today") return appointments.filter((apt) => apt.appointment_date === todayStr)
+    if (quickFilter === "tomorrow") return appointments.filter((apt) => apt.appointment_date === tomorrowStr)
 
     if (quickFilter === "date") {
       if (!selectedDate) return []
@@ -161,7 +161,6 @@ export function AppointmentsList({ appointments: initialAppointments }: Appointm
     })
   }, [appointments, quickFilter, selectedDate, todayStr, tomorrowStr])
 
-  // ✅ agrupa por data e ordena horários dentro de cada data
   const appointmentsByDate = useMemo(() => {
     const grouped = filteredAppointments.reduce((acc, apt) => {
       const date = apt.appointment_date
@@ -177,7 +176,6 @@ export function AppointmentsList({ appointments: initialAppointments }: Appointm
     return grouped
   }, [filteredAppointments])
 
-  // ✅ ordena datas com HOJE primeiro (se estiver no filtro), depois crescente
   const orderedDates = useMemo(() => {
     const dates = Object.keys(appointmentsByDate)
     dates.sort((a, b) => {
@@ -203,7 +201,6 @@ export function AppointmentsList({ appointments: initialAppointments }: Appointm
 
   return (
     <div className="space-y-6">
-      {/* ✅ barra de filtros */}
       <Card className="border-muted/60 shadow-sm">
         <CardHeader className="space-y-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -216,41 +213,20 @@ export function AppointmentsList({ appointments: initialAppointments }: Appointm
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={quickFilter === "today" ? "default" : "outline"}
-                  onClick={() => setQuickFilter("today")}
-                >
+                <Button type="button" size="sm" variant={quickFilter === "today" ? "default" : "outline"} onClick={() => setQuickFilter("today")}>
                   Hoje
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={quickFilter === "tomorrow" ? "default" : "outline"}
-                  onClick={() => setQuickFilter("tomorrow")}
-                >
+                <Button type="button" size="sm" variant={quickFilter === "tomorrow" ? "default" : "outline"} onClick={() => setQuickFilter("tomorrow")}>
                   Amanhã
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={quickFilter === "next7" ? "default" : "outline"}
-                  onClick={() => setQuickFilter("next7")}
-                >
+                <Button type="button" size="sm" variant={quickFilter === "next7" ? "default" : "outline"} onClick={() => setQuickFilter("next7")}>
                   Próx. 7 dias
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={quickFilter === "all" ? "default" : "outline"}
-                  onClick={() => setQuickFilter("all")}
-                >
+                <Button type="button" size="sm" variant={quickFilter === "all" ? "default" : "outline"} onClick={() => setQuickFilter("all")}>
                   Todos
                 </Button>
               </div>
 
-              {/* filtro por data específica */}
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -282,7 +258,6 @@ export function AppointmentsList({ appointments: initialAppointments }: Appointm
         </CardHeader>
       </Card>
 
-      {/* ✅ lista filtrada */}
       {orderedDates.map((date) => {
         const dateAppointments = appointmentsByDate[date]
         const isToday = date === todayStr
@@ -310,37 +285,33 @@ export function AppointmentsList({ appointments: initialAppointments }: Appointm
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center gap-2">
                         <p className="font-semibold">{appointment.appointment_time}</p>
-                        <Badge variant="outline" className={statusColors[appointment.status]}>
-                          {statusLabels[appointment.status]}
+                        <Badge variant="outline" className={statusColors[appointment.status as keyof typeof statusColors]}>
+                          {statusLabels[appointment.status as keyof typeof statusLabels] ?? appointment.status}
                         </Badge>
                       </div>
+
                       <p className="text-sm">
                         <span className="font-medium">{appointment.clients?.name}</span> • {appointment.clients?.phone}
                       </p>
+
                       <p className="text-sm text-muted-foreground">
                         {appointment.services?.name} com {appointment.barbers?.name}
                       </p>
-                      <p className="text-sm font-medium">R$ {appointment.service_price_at_booking.toFixed(2)}</p>
+
+                      <p className="text-sm font-medium">R$ {Number(appointment.service_price_at_booking || 0).toFixed(2)}</p>
+
                       {appointment.notes && <p className="text-sm text-muted-foreground">Obs: {appointment.notes}</p>}
                     </div>
 
                     <div className="flex gap-2">
                       {appointment.status === "pending" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => updateStatus(appointment.id, "confirmed")}
-                          disabled={isLoading}
-                        >
+                        <Button size="sm" variant="outline" onClick={() => updateStatus(appointment.id, "confirmed")} disabled={isLoading}>
                           <Check className="h-4 w-4" />
                         </Button>
                       )}
 
                       {appointment.status === "confirmed" && (
-                        <Dialog
-                          open={paymentDialog === appointment.id}
-                          onOpenChange={(open) => setPaymentDialog(open ? appointment.id : null)}
-                        >
+                        <Dialog open={paymentDialog === appointment.id} onOpenChange={(open) => setPaymentDialog(open ? appointment.id : null)}>
                           <DialogTrigger asChild>
                             <Button size="sm" variant="default" disabled={isLoading}>
                               <DollarSign className="mr-1 h-4 w-4" />
@@ -374,7 +345,7 @@ export function AppointmentsList({ appointments: initialAppointments }: Appointm
                                 <Input
                                   type="number"
                                   step="0.01"
-                                  placeholder={`R$ ${appointment.service_price_at_booking.toFixed(2)}`}
+                                  placeholder={`R$ ${Number(appointment.service_price_at_booking || 0).toFixed(2)}`}
                                   value={paymentAmount}
                                   onChange={(e) => setPaymentAmount(e.target.value)}
                                 />
@@ -390,12 +361,7 @@ export function AppointmentsList({ appointments: initialAppointments }: Appointm
                       )}
 
                       {(appointment.status === "pending" || appointment.status === "confirmed") && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => updateStatus(appointment.id, "cancelled")}
-                          disabled={isLoading}
-                        >
+                        <Button size="sm" variant="outline" onClick={() => updateStatus(appointment.id, "cancelled")} disabled={isLoading}>
                           <X className="h-4 w-4" />
                         </Button>
                       )}

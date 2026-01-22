@@ -1,71 +1,58 @@
 "use client"
 
-import type React from "react"
-
-import { useState, useEffect } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
+
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { useToast } from "@/hooks/use-toast"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, Clock } from "lucide-react"
-import { format, addMinutes, parse, isSameDay } from "date-fns"
+
+import { useToast } from "@/hooks/use-toast"
+
+import { Calendar as CalendarIcon } from "lucide-react"
+import { addMinutes, format, isSameDay, parse } from "date-fns"
 import { ptBR } from "date-fns/locale"
+
 import type { Service, Barber } from "@/lib/types"
 
 interface BookingFormProps {
   services: Service[]
   barbers: Barber[]
+  barbershopId: string
 }
-
-const allTimeSlots = [
-  "09:00",
-  "09:30",
-  "10:00",
-  "10:30",
-  "11:00",
-  "11:30",
-  "12:00",
-  "12:30",
-  "13:00",
-  "13:30",
-  "14:00",
-  "14:30",
-  "15:00",
-  "15:30",
-  "16:00",
-  "16:30",
-  "17:00",
-  "17:30",
-  "18:00",
-  "18:30",
-  "19:00",
-]
 
 // ✅ margem de segurança para “agendar em cima da hora”
 const MINUTES_CUTOFF = 5
 
-export function BookingForm({ services, barbers }: BookingFormProps) {
+export function BookingForm({ services, barbers, barbershopId }: BookingFormProps) {
+  const supabase = useMemo(() => createClient(), [])
+  const { toast } = useToast()
+
   const [isLoading, setIsLoading] = useState(false)
+
   const [selectedDate, setSelectedDate] = useState<Date>()
   const [selectedService, setSelectedService] = useState<string>("")
-  const [selectedBarber, setSelectedBarber] = useState<string>(barbers.length === 1 ? barbers[0].id : "")
+  const [selectedBarber, setSelectedBarber] = useState<string>("")
   const [selectedTime, setSelectedTime] = useState<string>("")
+
   const [clientName, setClientName] = useState("")
   const [clientPhone, setClientPhone] = useState("")
   const [clientEmail, setClientEmail] = useState("")
   const [notes, setNotes] = useState("")
-  const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>(allTimeSlots)
 
-  const { toast } = useToast()
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([])
 
-  const selectedServiceData = services.find((s) => s.id === selectedService)
+  const selectedServiceData = useMemo(
+    () => services.find((s) => s.id === selectedService),
+    [services, selectedService],
+  )
 
+  // Se só existir 1 barbeiro, seleciona automaticamente
   useEffect(() => {
     if (barbers.length === 1 && selectedBarber !== barbers[0].id) {
       setSelectedBarber(barbers[0].id)
@@ -74,67 +61,81 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
 
   const calculateAvailableTimeSlots = async (serviceId: string, barberId: string, date: Date) => {
     const service = services.find((s) => s.id === serviceId)
-    if (!service) return allTimeSlots
+    if (!service) {
+      setAvailableTimeSlots([])
+      return
+    }
 
-    const supabase = createClient()
     const dateStr = format(date, "yyyy-MM-dd")
     const dayOfWeek = date.getDay()
 
-    // Fetch availability for the selected day
-    const { data: availability } = await supabase.from("availability").select("*").eq("day_of_week", dayOfWeek).single()
+    // ✅ availability por (shop, day_of_week)
+    const { data: availability, error: availabilityError } = await supabase
+      .from("availability")
+      .select("*")
+      .eq("barbershop_id", barbershopId)
+      .eq("day_of_week", dayOfWeek)
+      .maybeSingle()
+
+    if (availabilityError) {
+      console.error("[BookingForm] availability error:", availabilityError)
+    }
 
     if (!availability || !availability.is_active) {
       setAvailableTimeSlots([])
       return
     }
 
-    // Generate slots based on availability
+    // slots conforme abertura
     const slots: string[] = []
-    let current = parse(availability.start_time.slice(0, 5), "HH:mm", new Date())
-    const end = parse(availability.end_time.slice(0, 5), "HH:mm", new Date())
+    let current = parse(String(availability.start_time).slice(0, 5), "HH:mm", new Date())
+    const end = parse(String(availability.end_time).slice(0, 5), "HH:mm", new Date())
 
     while (current < end) {
       slots.push(format(current, "HH:mm"))
       current = addMinutes(current, 30)
     }
 
-    // Get existing appointments for the selected barber and date
-    const { data: existingAppointments } = await supabase
+    // agendamentos existentes (do barbeiro + barbearia + dia)
+    const { data: existingAppointments, error: apptError } = await supabase
       .from("appointments")
       .select("appointment_time, service_duration_at_booking")
+      .eq("barbershop_id", barbershopId)
       .eq("barber_id", barberId)
       .eq("appointment_date", dateStr)
       .in("status", ["pending", "confirmed"])
 
+    if (apptError) {
+      console.error("[BookingForm] existing appointments error:", apptError)
+    }
+
     const occupiedSlots = new Set<string>()
 
-    // Mark all occupied time slots based on appointment duration
-    existingAppointments?.forEach((apt: { appointment_time: string; service_duration_at_booking: number }) => {
-      const startTime = parse(apt.appointment_time.slice(0, 5), "HH:mm", new Date())
-      const duration = apt.service_duration_at_booking || 30
+    // marca slots ocupados conforme duração de cada agendamento
+    existingAppointments?.forEach((apt: { appointment_time: string; service_duration_at_booking: number | null }) => {
+      const startTime = parse(String(apt.appointment_time).slice(0, 5), "HH:mm", new Date())
+      const duration = apt.service_duration_at_booking ?? 30
       const endTime = addMinutes(startTime, duration)
 
       slots.forEach((slot) => {
         const slotTime = parse(slot, "HH:mm", new Date())
         const slotEndTime = addMinutes(slotTime, service.duration)
 
-        // Check if slots overlap
-        if (
+        const overlaps =
           (slotTime >= startTime && slotTime < endTime) ||
           (slotEndTime > startTime && slotEndTime <= endTime) ||
           (slotTime <= startTime && slotEndTime >= endTime)
-        ) {
-          occupiedSlots.add(slot)
-        }
+
+        if (overlaps) occupiedSlots.add(slot)
       })
     })
 
-    // Mark slots occupied by breaks
-    if (availability.breaks) {
-      availability.breaks.forEach((brk: { start: string; end: string }) => {
-        const startStr = brk.start ? brk.start.slice(0, 5) : ""
-        const endStr = brk.end ? brk.end.slice(0, 5) : ""
-
+    // breaks (jsonb)
+    const breaksArr: any[] = Array.isArray((availability as any).breaks) ? (availability as any).breaks : []
+    if (breaksArr.length > 0) {
+      breaksArr.forEach((brk) => {
+        const startStr = brk?.start ? String(brk.start).slice(0, 5) : ""
+        const endStr = brk?.end ? String(brk.end).slice(0, 5) : ""
         if (!startStr || !endStr) return
 
         const breakStart = parse(startStr, "HH:mm", new Date())
@@ -144,38 +145,33 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
           const slotTime = parse(slot, "HH:mm", new Date())
           const slotEndTime = addMinutes(slotTime, service.duration)
 
-          // Check if slot overlaps with break
-          if (
+          const overlaps =
             (slotTime >= breakStart && slotTime < breakEnd) ||
             (slotEndTime > breakStart && slotEndTime <= breakEnd) ||
             (slotTime <= breakStart && slotEndTime >= breakEnd)
-          ) {
-            occupiedSlots.add(slot)
-          }
+
+          if (overlaps) occupiedSlots.add(slot)
         })
       })
     }
 
-    // Use availability.end_time as closing time
-    const closingTime = parse(availability.end_time.slice(0, 5), "HH:mm", new Date())
-
+    const closingTime = parse(String(availability.end_time).slice(0, 5), "HH:mm", new Date())
     const now = new Date()
-    const cutoffNow = addMinutes(now, MINUTES_CUTOFF) // ✅ margem
+    const cutoffNow = addMinutes(now, MINUTES_CUTOFF)
 
     const available = slots.filter((slot) => {
       if (occupiedSlots.has(slot)) return false
 
-      // Checa se o serviço cabe até o fechamento
+      // serviço precisa caber até o fechamento
       const slotTime = parse(slot, "HH:mm", new Date())
       const endTime = addMinutes(slotTime, service.duration)
       if (endTime > closingTime) return false
 
-      // ✅ se for HOJE, remove horários que já passaram (com margem)
+      // se for HOJE, remove horários que já passaram (com margem)
       if (isSameDay(date, now)) {
         const slotDateTime = new Date(date)
         const [hh, mm] = slot.split(":").map((n) => Number(n))
         slotDateTime.setHours(hh, mm, 0, 0)
-
         if (slotDateTime <= cutoffNow) return false
       }
 
@@ -184,7 +180,7 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
 
     setAvailableTimeSlots(available)
 
-    // ✅ se o horário selecionado ficou inválido após recalcular, limpa seleção
+    // se o horário selecionado ficou inválido após recalcular, limpa seleção
     if (selectedTime && !available.includes(selectedTime)) {
       setSelectedTime("")
     }
@@ -212,29 +208,66 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
     if (date && selectedService && selectedBarber) {
       calculateAvailableTimeSlots(selectedService, selectedBarber, date)
     } else {
-      setAvailableTimeSlots(allTimeSlots)
+      setAvailableTimeSlots([])
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!barbershopId) {
+      toast({
+        title: "Erro",
+        description: "Barbearia inválida (barbershopId ausente).",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!selectedDate || !selectedService || !selectedBarber || !selectedTime) {
+      toast({
+        title: "Preencha todos os campos",
+        description: "Selecione serviço, barbeiro, data e horário.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const service = services.find((s) => s.id === selectedService)
+    if (!service) {
+      toast({ title: "Erro", description: "Serviço inválido.", variant: "destructive" })
+      return
+    }
+
     setIsLoading(true)
 
     try {
-      const supabase = createClient()
+      const dateStr = format(selectedDate, "yyyy-MM-dd")
 
-      // First, create or get the client
-      const { data: existingClient } = await supabase.from("clients").select("*").eq("phone", clientPhone).single()
+      // 1) client por (shop, phone)
+      const { data: existingClient, error: clientLookupError } = await supabase
+        .from("clients")
+        .select("*")
+        .eq("barbershop_id", barbershopId)
+        .eq("phone", clientPhone)
+        .maybeSingle()
+
+      if (clientLookupError) {
+        console.error("[BookingForm] client lookup error:", clientLookupError)
+      }
 
       let clientId = existingClient?.id
 
-      if (!existingClient) {
+      // 2) cria client se não existe
+      if (!clientId) {
         const { data: newClient, error: clientError } = await supabase
           .from("clients")
           .insert({
+            barbershop_id: barbershopId,
             name: clientName,
             phone: clientPhone,
             email: clientEmail || null,
+            notes: null,
           })
           .select()
           .single()
@@ -243,16 +276,18 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
         clientId = newClient.id
       }
 
+      // 3) cria agendamento (com snapshot de preço/duração)
       const { error: appointmentError } = await supabase.from("appointments").insert({
+        barbershop_id: barbershopId,
         client_id: clientId,
         barber_id: selectedBarber,
         service_id: selectedService,
-        appointment_date: format(selectedDate!, "yyyy-MM-dd"),
+        appointment_date: dateStr,
         appointment_time: selectedTime,
         status: "pending",
         notes: notes || null,
-        service_price_at_booking: selectedServiceData!.price,
-        service_duration_at_booking: selectedServiceData!.duration,
+        service_price_at_booking: service.price,
+        service_duration_at_booking: service.duration,
       })
 
       if (appointmentError) throw appointmentError
@@ -265,15 +300,15 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
       // Reset form
       setSelectedDate(undefined)
       setSelectedService("")
-      setSelectedBarber("")
+      setSelectedBarber(barbers.length === 1 ? barbers[0].id : "")
       setSelectedTime("")
       setClientName("")
       setClientPhone("")
       setClientEmail("")
       setNotes("")
-      setAvailableTimeSlots(allTimeSlots)
+      setAvailableTimeSlots([])
     } catch (error) {
-      console.error("[v0] Booking error:", error)
+      console.error("[BookingForm] error:", error)
       toast({
         title: "Erro ao agendar",
         description: "Tente novamente mais tarde.",
@@ -287,15 +322,12 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
   return (
     <Card
       className={[
-        // ✅ GLASSMORPHISM (vidro)
         "border-white/15 bg-background/40 backdrop-blur-xl shadow-xl",
         "supports-backdrop-filter:bg-background/30",
         "dark:border-white/10 dark:bg-background/30",
-        // ✅ estética premium
         "rounded-2xl overflow-hidden",
       ].join(" ")}
     >
-
       <CardContent className="p-6 sm:p-8">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2">
@@ -323,6 +355,17 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="email">Email (opcional)</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="seuemail@exemplo.com"
+              value={clientEmail}
+              onChange={(e) => setClientEmail(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="barber">Barbeiro</Label>
             <Select value={selectedBarber} onValueChange={handleBarberChange} required>
               <SelectTrigger id="barber">
@@ -331,10 +374,7 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
               <SelectContent>
                 {barbers.map((barber) => (
                   <SelectItem key={barber.id} value={barber.id}>
-                    <div className="flex flex-col">
-                      <span>{barber.name}</span>
-                      {barber.specialty && <span className="text-xs text-muted-foreground">{barber.specialty}</span>}
-                    </div>
+                    {barber.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -360,7 +400,6 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
                 ))}
               </SelectContent>
             </Select>
-            {selectedServiceData && <p className="text-sm text-muted-foreground">{selectedServiceData.description}</p>}
           </div>
 
           <div className="grid gap-6 md:grid-cols-2">
@@ -368,24 +407,13 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
               <Label>Data</Label>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start text-left font-normal bg-transparent"
-                    type="button"
-                  >
+                  <Button variant="outline" className="w-full justify-start text-left font-normal bg-transparent" type="button">
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {selectedDate ? format(selectedDate, "PPP", { locale: ptBR }) : "Selecione a data"}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={handleDateChange}
-                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                    initialFocus
-                    locale={ptBR}
-                  />
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={selectedDate} onSelect={handleDateChange} locale={ptBR} initialFocus />
                 </PopoverContent>
               </Popover>
             </div>
@@ -405,20 +433,26 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
                   {availableTimeSlots.length > 0 ? (
                     availableTimeSlots.map((time) => (
                       <SelectItem key={time} value={time}>
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          {time}
-                        </div>
+                        {time}
                       </SelectItem>
                     ))
                   ) : (
-                    <div className="p-2 text-sm text-muted-foreground">Nenhum horário disponível</div>
+                    <div className="px-3 py-2 text-sm text-muted-foreground">Nenhum horário disponível</div>
                   )}
                 </SelectContent>
               </Select>
-              {selectedService && selectedBarber && selectedDate && availableTimeSlots.length === 0 && (
-                <p className="text-sm text-destructive">Não há horários disponíveis para esta data</p>
-              )}
+
+              {/* recalcula quando tiver tudo selecionado */}
+              {selectedService && selectedBarber && selectedDate ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="px-0 text-sm underline text-muted-foreground hover:text-foreground"
+                  onClick={() => calculateAvailableTimeSlots(selectedService, selectedBarber, selectedDate)}
+                >
+                  Atualizar horários
+                </Button>
+              ) : null}
             </div>
           </div>
 
@@ -434,7 +468,7 @@ export function BookingForm({ services, barbers }: BookingFormProps) {
           </div>
 
           <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
-            {isLoading ? "Agendando..." : "Confirmar Agendamento"}
+            {isLoading ? "Agendando..." : "Confirmar agendamento"}
           </Button>
         </form>
       </CardContent>

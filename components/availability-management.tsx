@@ -11,13 +11,15 @@ import { useToast } from "@/hooks/use-toast"
 import { createClient } from "@/lib/supabase/client"
 import { Clock, Save, Plus, Trash2, CalendarDays } from "lucide-react"
 
+export type BreakItem = { start: string; end: string }
+
 export interface Availability {
   id?: string
   day_of_week: number
   start_time: string
   end_time: string
   is_active: boolean
-  breaks?: { start: string; end: string }[]
+  breaks?: BreakItem[]
 }
 
 const DAYS = [
@@ -32,27 +34,33 @@ const DAYS = [
 
 interface AvailabilityManagementProps {
   availability: Availability[]
+  barbershopId: string
 }
 
-export function AvailabilityManagement({ availability: initialAvailability }: AvailabilityManagementProps) {
+export function AvailabilityManagement({ availability: initialAvailability, barbershopId }: AvailabilityManagementProps) {
   const router = useRouter()
+  const { toast } = useToast()
+  const supabase = useMemo(() => createClient(), [])
 
   const [isLoading, setIsLoading] = useState(false)
-  const { toast } = useToast()
-  const supabase = createClient()
 
-  // Merge initial availability with days structure to ensure all days are represented
   const [items, setItems] = useState(() => {
     const initialMap = new Map(initialAvailability.map((item) => [item.day_of_week, item]))
-    return DAYS.map((day) => ({
-      id: initialMap.get(day.id)?.id,
-      day_of_week: day.id,
-      label: day.label,
-      start_time: initialMap.get(day.id)?.start_time.slice(0, 5) || "09:00",
-      end_time: initialMap.get(day.id)?.end_time.slice(0, 5) || "19:00",
-      is_active: initialMap.get(day.id)?.is_active ?? day.id !== 0, // Default closed on Sunday
-      breaks: initialMap.get(day.id)?.breaks || [],
-    }))
+
+    return DAYS.map((day) => {
+      const row = initialMap.get(day.id)
+      const breaksArr = Array.isArray((row as any)?.breaks) ? ((row as any).breaks as any[]) : []
+
+      return {
+        id: row?.id,
+        day_of_week: day.id,
+        label: day.label,
+        start_time: String(row?.start_time ?? "09:00").slice(0, 5),
+        end_time: String(row?.end_time ?? "19:00").slice(0, 5),
+        is_active: row?.is_active ?? day.id !== 0,
+        breaks: breaksArr as BreakItem[],
+      }
+    })
   })
 
   const activeDaysCount = useMemo(() => items.filter((i) => i.is_active).length, [items])
@@ -93,31 +101,36 @@ export function AvailabilityManagement({ availability: initialAvailability }: Av
   }
 
   const handleSave = async () => {
+    if (!barbershopId) {
+      toast({
+        title: "Erro de contexto",
+        description: "Barbearia não identificada (barbershopId ausente).",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsLoading(true)
     try {
       const updates = items.map(({ day_of_week, start_time, end_time, is_active, breaks }) => ({
+        barbershop_id: barbershopId,
         day_of_week,
         start_time,
         end_time,
         is_active,
-        breaks,
+        breaks: Array.isArray(breaks) ? breaks : [],
       }))
 
-      const { error } = await supabase.from("availability").upsert(updates, { onConflict: "day_of_week" })
+      const { error } = await supabase.from("availability").upsert(updates, { onConflict: "barbershop_id,day_of_week" })
       if (error) throw error
 
-      toast({
-        title: "Horários atualizados",
-        description: "A disponibilidade foi salva com sucesso.",
-      })
-
-      // ✅ Atualiza dados do Server Component (sem F5)
+      toast({ title: "Horários atualizados", description: "A disponibilidade foi salva com sucesso." })
       router.refresh()
     } catch (error: any) {
-      console.error("Error saving availability:", JSON.stringify(error, null, 2))
+      console.error("[AvailabilityManagement] save error:", error)
       toast({
         title: "Erro ao salvar",
-        description: error.message || "Não foi possível atualizar os horários.",
+        description: error?.message || "Não foi possível atualizar os horários.",
         variant: "destructive",
       })
     } finally {
@@ -168,7 +181,6 @@ export function AvailabilityManagement({ availability: initialAvailability }: Av
                 item.is_active ? "bg-card" : "bg-muted/20 opacity-90",
               ].join(" ")}
             >
-              {/* header do dia */}
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center justify-between gap-3 sm:justify-start">
                   <div className="flex items-center gap-3">
@@ -183,7 +195,6 @@ export function AvailabilityManagement({ availability: initialAvailability }: Av
                   </div>
                 </div>
 
-                {/* horários */}
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Clock className="h-4 w-4" />
@@ -210,7 +221,6 @@ export function AvailabilityManagement({ availability: initialAvailability }: Av
                 </div>
               </div>
 
-              {/* intervalos */}
               {item.is_active && (
                 <div className="mt-4 border-t pt-4">
                   <div className="flex flex-col gap-3">
@@ -227,22 +237,19 @@ export function AvailabilityManagement({ availability: initialAvailability }: Av
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {item.breaks?.map((brk, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center justify-between gap-3 rounded-lg border bg-muted/10 p-3"
-                          >
+                        {item.breaks?.map((brk, idx: number) => (
+                          <div key={idx} className="flex items-center justify-between gap-3 rounded-lg border bg-muted/10 p-3">
                             <div className="flex min-w-0 items-center gap-2">
                               <Input
                                 type="time"
-                                value={brk.start}
+                                value={String(brk.start).slice(0, 5)}
                                 onChange={(e) => updateBreak(item.day_of_week, idx, "start", e.target.value)}
                                 className="h-9 w-27.5"
                               />
                               <span className="text-xs text-muted-foreground">até</span>
                               <Input
                                 type="time"
-                                value={brk.end}
+                                value={String(brk.end).slice(0, 5)}
                                 onChange={(e) => updateBreak(item.day_of_week, idx, "end", e.target.value)}
                                 className="h-9 w-27.5"
                               />
