@@ -2,17 +2,14 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
+  const response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
   })
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.error("[v0] Missing Supabase environment variables in middleware")
-    return supabaseResponse
-  }
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
@@ -20,30 +17,27 @@ export async function updateSession(request: NextRequest) {
         return request.cookies.getAll()
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-        supabaseResponse = NextResponse.next({
-          request,
+        cookiesToSet.forEach(({ name, value, options }) => {
+          request.cookies.set(name, value)
+          response.cookies.set(name, value, options)
         })
-        cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, options))
       },
     },
   })
 
-  try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-    // Protect /barbeiro routes
-    if (request.nextUrl.pathname.startsWith("/barbeiro") && !user) {
-      const url = request.nextUrl.clone()
-      url.pathname = "/auth/login"
-      return NextResponse.redirect(url)
-    }
-  } catch (error) {
-    console.error("[v0] Error in middleware auth check:", error)
-    // Continue without blocking the request
+  const pathname = request.nextUrl.pathname
+  const isDashboard = pathname === "/barbeiro" || pathname.endsWith("/barbeiro")
+
+  if (isDashboard && !user) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/auth/login"
+    url.searchParams.set("reason", "proxy_no_user")
+    return NextResponse.redirect(url)
   }
 
-  return supabaseResponse
+  return response
 }

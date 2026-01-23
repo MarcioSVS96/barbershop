@@ -35,9 +35,17 @@ export async function generateMetadata(): Promise<Metadata> {
 
   // Se tiver logo_url, usa como favicon do admin.
   // Senão, mantém os padrões do app.
-  const icons: Metadata["icons"] = settings?.logo_url
+  const publicUrlFromPath = (path: string | null) => {
+    if (!path) return ""
+    if (path.startsWith("http://") || path.startsWith("https://")) return path
+    const { data } = supabase.storage.from("barbershop-assets").getPublicUrl(path)
+    return data.publicUrl
+  }
+
+  const logoUrl = publicUrlFromPath(settings?.logo_url ?? null)
+  const icons: Metadata["icons"] = logoUrl
     ? {
-        icon: settings.logo_url,
+        icon: logoUrl,
         apple: "/apple-icon.png",
       }
     : defaultIcons

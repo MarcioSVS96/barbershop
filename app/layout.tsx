@@ -1,15 +1,29 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
+import { JetBrains_Mono, Poppins } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "@/components/ui/toaster"
-import { createClient } from "@/lib/supabase/server"
 import "./globals.css"
 
-const _geist = Geist({ subsets: ["latin"] })
-const _geistMono = Geist_Mono({ subsets: ["latin"] })
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-primary",
+})
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-code",
+})
 
-// ✅ Mantém seus ícones atuais como fallback
+/**
+ * ✅ Branding GLOBAL do seu SaaS (vale para / e /auth/*)
+ * Rotas /[slug] devem ter o próprio layout + generateMetadata.
+ */
+const APP_NAME = "Agenda Barber"
+const APP_DESCRIPTION = "Plataforma de agendamento e gestão para barbearias."
+
+// ✅ Mantém seus ícones atuais como fallback (do projeto)
 const defaultIcons: Metadata["icons"] = {
   icon: [
     {
@@ -24,46 +38,20 @@ const defaultIcons: Metadata["icons"] = {
       url: "/icon.svg",
       type: "image/svg+xml",
     },
+    // fallback comum (se existir)
+    { url: "/favicon.ico" },
   ],
   apple: "/apple-icon.png",
 }
 
-// ✅ Metadata dinâmico a partir do perfil (barbershop_settings)
-export async function generateMetadata(): Promise<Metadata> {
-  const supabase = await createClient()
-
-  const { data: settings } = await supabase
-    .from("barbershop_settings")
-    .select("name, description, logo_url, updated_at")
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  const title = settings?.name?.trim() || "Barbearia - Agendamento Online"
-  const description = settings?.description?.trim() || "Sistema de agendamento e controle financeiro para barbearia"
-
-  // ✅ Se tiver logo_url, usa como favicon
-  // Cache-buster com updated_at ajuda a atualizar o ícone no navegador
-  const updatedAtMs = settings?.updated_at ? new Date(settings.updated_at).getTime() : 0
-  const logoUrl = settings?.logo_url || ""
-  const iconUrl =
-    logoUrl && updatedAtMs
-      ? `${logoUrl}${logoUrl.includes("?") ? "&" : "?"}v=${updatedAtMs}`
-      : logoUrl
-
-  const icons: Metadata["icons"] = iconUrl
-    ? {
-        icon: iconUrl,
-        apple: "/apple-icon.png",
-      }
-    : defaultIcons
-
-  return {
-    title,
-    description,
-    generator: "v0.app",
-    icons,
-  }
+export const metadata: Metadata = {
+  title: {
+    default: APP_NAME,
+    template: `%s • ${APP_NAME}`,
+  },
+  description: APP_DESCRIPTION,
+  generator: "v0.app",
+  icons: defaultIcons,
 }
 
 export default function RootLayout({
@@ -73,7 +61,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className={`font-sans antialiased`}>
+      <body className={`${poppins.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
         {children}
         <Toaster />
         <Analytics />

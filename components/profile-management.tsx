@@ -1,4 +1,4 @@
-// C:\Projetos\barbershop\components\profile-management.tsx
+﻿// C:\Projetos\barbershop\components\profile-management.tsx
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
@@ -50,6 +50,13 @@ function withCacheBuster(url: string, v?: number) {
   return `${url}${hasQuery ? "&" : "?"}v=${v}`
 }
 
+function publicUrlFromPath(supabase: ReturnType<typeof createClient>, path: string) {
+  if (!path) return ""
+  if (path.startsWith("http://") || path.startsWith("https://")) return path
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
+  return data.publicUrl
+}
+
 export function ProfileManagement({ barbershopId, settings, barbers: initialBarbers }: ProfileManagementProps) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -67,27 +74,37 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
 
   const [name, setName] = useState(settings?.name || "")
   const [description, setDescription] = useState(settings?.description || "")
-  const [logoUrl, setLogoUrl] = useState(settings?.logo_url || "")
-  const [heroBackgroundUrl, setHeroBackgroundUrl] = useState(settings?.hero_background_url || "")
+  const [logoPath, setLogoPath] = useState(settings?.logo_url || "")
+  const [heroPath, setHeroPath] = useState(settings?.hero_background_url || "")
 
   useEffect(() => {
+    console.groupCollapsed("[ProfileManagement] settings changed")
+    console.log("settings?.id:", settings?.id)
+    console.log("settings?.name:", settings?.name)
+    console.log("settings?.updated_at:", (settings as any)?.updated_at)
+    console.log("settings?.logo_url:", settings?.logo_url)
+    console.log("settings?.hero_background_url:", settings?.hero_background_url)
+    console.log("barbershopId prop:", barbershopId)
+    console.groupEnd()
+
     setName(settings?.name || "")
     setDescription(settings?.description || "")
-    setLogoUrl(settings?.logo_url || "")
-    setHeroBackgroundUrl(settings?.hero_background_url || "")
+    setLogoPath(settings?.logo_url || "")
+    setHeroPath(settings?.hero_background_url || "")
     setLogoBust(0)
     setHeroBust(0)
-  }, [settings?.id, (settings as any)?.updated_at])
+  }, [settings?.id, (settings as any)?.updated_at, barbershopId])
 
   const hasChanges =
     name !== (settings?.name || "") ||
     description !== (settings?.description || "") ||
-    logoUrl !== (settings?.logo_url || "") ||
-    heroBackgroundUrl !== (settings?.hero_background_url || "")
+    logoPath !== (settings?.logo_url || "") ||
+    heroPath !== (settings?.hero_background_url || "")
 
-  // ✅ multi-tenant storage path
+  // ✅ multi-tenant storage path (versionado)
   function storagePath(type: "logo" | "hero", ext: string) {
-    return `shops/${barbershopId}/profile/${type}.${ext}`
+    const version = Date.now()
+    return `shops/${barbershopId}/profile/${type}-${version}.${ext}`
   }
 
   async function uploadImage(file: File, type: "logo" | "hero") {
@@ -97,15 +114,28 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
     const ext = safeExt(file)
     const path = storagePath(type, ext)
 
+    console.groupCollapsed(`[ProfileManagement] uploadImage(${type})`)
+    console.log("file.name:", file.name)
+    console.log("file.type:", file.type)
+    console.log("file.size:", file.size)
+    console.log("computed ext:", ext)
+    console.log("upload path:", path)
+    console.groupEnd()
+
     const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+      // como o path muda, não sobrescreve o mesmo arquivo
       upsert: true,
       contentType: file.type,
-      cacheControl: "3600",
+      cacheControl: "0", // 🔥 evita cache enquanto você testa
     })
-    if (error) throw error
 
-    const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
-    return data.publicUrl
+    if (error) {
+      console.error("[ProfileManagement] upload error:", error)
+      throw error
+    }
+
+    console.log(`[ProfileManagement] upload ok: ${path}`)
+    return path
   }
 
   async function handleUploadLogo(e: React.ChangeEvent<HTMLInputElement>) {
@@ -115,8 +145,8 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
 
     setIsUploadingLogo(true)
     try {
-      const url = await uploadImage(file, "logo")
-      setLogoUrl(url)
+      const path = await uploadImage(file, "logo")
+      setLogoPath(path)
       setLogoBust(Date.now())
       toast({ title: "Logo enviada", description: "Preview atualizado. Clique em salvar para aplicar." })
     } catch (err: any) {
@@ -133,8 +163,8 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
 
     setIsUploadingHero(true)
     try {
-      const url = await uploadImage(file, "hero")
-      setHeroBackgroundUrl(url)
+      const path = await uploadImage(file, "hero")
+      setHeroPath(path)
       setHeroBust(Date.now())
       toast({ title: "Background enviado", description: "Preview atualizado. Clique em salvar para aplicar." })
     } catch (err: any) {
@@ -151,21 +181,105 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
     }
 
     setIsSaving(true)
+
+    // ✅ id mais confiável: o que veio do DB (settings.id)
+    const targetId = settings?.id ?? barbershopId
+
     try {
+      // =========================
+      // DEBUG / LOGS
+      // =========================
+      const userRes = await supabase.auth.getUser()
+
+      console.groupCollapsed("[ProfileManagement] handleSaveProfile DEBUG")
+      console.log("barbershopId prop:", barbershopId)
+      console.log("settings?.id:", settings?.id)
+      console.log("targetId (id usado no update):", targetId)
+      console.log("auth.user.id:", userRes.data?.user?.id)
+      console.log("auth.user.email:", userRes.data?.user?.email)
+      console.log("name:", name)
+      console.log("description:", description)
+      console.log("logoPath:", logoPath)
+      console.log("heroPath:", heroPath)
+      console.groupEnd()
+
+      if (!targetId) {
+        throw new Error("ID alvo ausente. settings.id e barbershopId vieram vazios.")
+      }
+
       const payload = {
         name: name.trim(),
         description: description.trim() || null,
-        logo_url: logoUrl || null,
-        hero_background_url: heroBackgroundUrl || null,
+        logo_url: logoPath || null,
+        hero_background_url: heroPath || null,
+        updated_at: new Date().toISOString(),
       }
 
-      // ✅ update do registro da barbearia (tenantId == barbershopId)
-      const { error } = await supabase.from("barbershop_settings").update(payload).eq("id", barbershopId)
-      if (error) throw error
+      // ✅ 0) checa membership (se falhar aqui, é 100% RLS/policy)
+      const uid = userRes.data?.user?.id
+      if (uid) {
+        const mem = await supabase
+          .from("barbershop_members")
+          .select("id, role, user_id, barbershop_id")
+          .eq("user_id", uid)
+          .eq("barbershop_id", targetId)
+          .maybeSingle()
+
+        console.groupCollapsed("[ProfileManagement] MEMBERSHIP CHECK")
+        console.log("mem.data:", mem.data)
+        console.log("mem.error:", mem.error)
+        console.groupEnd()
+      }
+
+      // ✅ 1) SELECT antes do UPDATE
+      const pre = await supabase
+        .from("barbershop_settings")
+        .select("id, name, updated_at, logo_url, hero_background_url")
+        .eq("id", targetId)
+        .maybeSingle()
+
+      console.groupCollapsed("[ProfileManagement] PRECHECK barbershop_settings")
+      console.log("pre.data:", pre.data)
+      console.log("pre.error:", pre.error)
+      console.groupEnd()
+
+      if (!pre.data) {
+        if (pre.error) {
+          throw new Error(`Não foi possível ler barbershop_settings (provável RLS). Detalhe: ${pre.error.message}`)
+        }
+        throw new Error("Não encontrei barbershop_settings com esse ID (provável ID incorreto chegando no componente).")
+      }
+
+      // ✅ 2) UPDATE
+      const upd = await supabase
+        .from("barbershop_settings")
+        .update(payload)
+        .eq("id", targetId)
+        .select("id, updated_at, logo_url, hero_background_url")
+
+      console.groupCollapsed("[ProfileManagement] UPDATE RESULT")
+      console.log("payload:", payload)
+      console.log("data:", upd.data)
+      console.log("error:", upd.error)
+      console.groupEnd()
+
+      if (upd.error) {
+        throw upd.error
+      }
+
+      const row = upd.data?.[0]
+      if (!row) {
+        throw new Error(
+          "UPDATE retornou 0 linhas. Isso normalmente é RLS bloqueando UPDATE ou bloqueando o SELECT pós-update (returning).",
+        )
+      }
 
       toast({ title: "Perfil salvo", description: "As configurações foram aplicadas com sucesso." })
+      setLogoPath(row.logo_url || "")
+      setHeroPath(row.hero_background_url || "")
       router.refresh()
     } catch (err: any) {
+      console.error("[ProfileManagement] handleSaveProfile error:", err)
       toast({
         title: "Erro ao salvar",
         description: err?.message || "Não foi possível salvar as configurações.",
@@ -176,8 +290,10 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
     }
   }
 
-  const logoPreviewSrc = withCacheBuster(logoUrl, logoBust || undefined)
-  const heroPreviewSrc = withCacheBuster(heroBackgroundUrl, heroBust || undefined)
+  const logoPublicUrl = publicUrlFromPath(supabase, logoPath)
+  const heroPublicUrl = publicUrlFromPath(supabase, heroPath)
+  const logoPreviewSrc = withCacheBuster(logoPublicUrl, logoBust || undefined)
+  const heroPreviewSrc = withCacheBuster(heroPublicUrl, heroBust || undefined)
 
   // =========================
   // GERENCIAR BARBEIROS (CRUD)
@@ -216,11 +332,10 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
       const barberData = {
         name: newBarberName.trim(),
         specialty: newBarberSpecialty.trim() || null,
-        barbershop_id: barbershopId, // ✅ multi-tenant
+        barbershop_id: barbershopId,
       }
 
       if (editingBarber) {
-        // ✅ protege multi-tenant: atualiza apenas se pertencer a esta barbearia
         const { error } = await supabase
           .from("barbers")
           .update(barberData)
@@ -230,7 +345,6 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
         if (error) throw error
 
         setBarbers((prev) => prev.map((b) => (b.id === editingBarber.id ? { ...b, ...barberData } : b)))
-
         toast({ title: "Barbeiro atualizado", description: "As informações foram atualizadas com sucesso." })
       } else {
         const { data, error } = await supabase.from("barbers").insert(barberData).select().single()
@@ -238,7 +352,6 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
         if (!data) throw new Error("Erro ao criar barbeiro")
 
         setBarbers((prev) => [...prev, data])
-
         toast({ title: "Barbeiro adicionado", description: "O novo barbeiro foi cadastrado com sucesso." })
       }
 
@@ -265,7 +378,6 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
 
     setIsSavingBarber(true)
     try {
-      // ✅ protege multi-tenant: deleta apenas se pertencer a esta barbearia
       const { error } = await supabase
         .from("barbers")
         .delete()
@@ -275,7 +387,6 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
       if (error) throw error
 
       setBarbers((prev) => prev.filter((b) => b.id !== id))
-
       toast({ title: "Barbeiro excluído", description: "O barbeiro foi removido com sucesso." })
       router.refresh()
     } catch (error) {
@@ -435,20 +546,24 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
 
                 <Button
                   variant="outline"
-                  disabled={!logoUrl}
-                  onClick={() => window.open(logoUrl, "_blank", "noopener,noreferrer")}
+                  disabled={!logoPublicUrl}
+                  onClick={() => window.open(logoPublicUrl, "_blank", "noopener,noreferrer")}
                 >
                   Abrir
                 </Button>
 
-                <Button variant="outline" disabled={!logoUrl} onClick={() => downloadFile(logoUrl, "logo")}>
+                <Button
+                  variant="outline"
+                  disabled={!logoPublicUrl}
+                  onClick={() => downloadFile(logoPublicUrl, "logo")}
+                >
                   Baixar
                 </Button>
               </div>
             </div>
 
             <div className="rounded-xl border bg-muted/10 p-4">
-              {logoUrl ? (
+              {logoPublicUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={logoPreviewSrc}
@@ -481,16 +596,16 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
 
                 <Button
                   variant="outline"
-                  disabled={!heroBackgroundUrl}
-                  onClick={() => window.open(heroBackgroundUrl, "_blank", "noopener,noreferrer")}
+                  disabled={!heroPublicUrl}
+                  onClick={() => window.open(heroPublicUrl, "_blank", "noopener,noreferrer")}
                 >
                   Abrir
                 </Button>
 
                 <Button
                   variant="outline"
-                  disabled={!heroBackgroundUrl}
-                  onClick={() => downloadFile(heroBackgroundUrl, "background")}
+                  disabled={!heroPublicUrl}
+                  onClick={() => downloadFile(heroPublicUrl, "background")}
                 >
                   Baixar
                 </Button>
@@ -498,7 +613,7 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
             </div>
 
             <div className="rounded-xl border bg-muted/10 p-4">
-              {heroBackgroundUrl ? (
+              {heroPublicUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={heroPreviewSrc}

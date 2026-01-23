@@ -18,11 +18,18 @@ export async function generateMetadata({
 
   if (!shop) return {}
 
+  const publicUrlFromPath = (path: string | null) => {
+    if (!path) return ""
+    if (path.startsWith("http://") || path.startsWith("https://")) return path
+    const { data } = supabase.storage.from("barbershop-assets").getPublicUrl(path)
+    return data.publicUrl
+  }
+
   return {
     title: shop.name || "Barbearia",
     description: shop.description || "Agende seu horário online",
     icons: {
-      icon: shop.logo_url || "/favicon.ico",
+      icon: publicUrlFromPath(shop.logo_url) || "/favicon.ico",
     },
   }
 }

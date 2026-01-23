@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -20,27 +19,36 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    const supabase = createClient()
     setIsLoading(true)
     setError(null)
 
     try {
+      const supabase = createClient()
+
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
       if (error) throw error
-      router.push("/barbeiro")
-      router.refresh()
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Erro ao fazer login")
+
+      // ✅ confirma sessão no client
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) throw sessionError
+      if (!sessionData.session) {
+        throw new Error("Sessão não foi criada. Tente novamente.")
+      }
+
+      // ✅ vai para a “ponte” que resolve o slug do usuário
+      router.replace("/barbeiro")
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Erro ao fazer login")
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-gradient-to-b from-background to-muted/20 p-6 md:p-10">
+    <div className="flex min-h-screen w-full items-center justify-center bg-linear-to-b from-background to-muted/20 p-6 md:p-10">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-2">
           <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-primary">
@@ -69,6 +77,7 @@ export default function LoginPage() {
                     onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
+
                 <div className="grid gap-2">
                   <Label htmlFor="password">Senha</Label>
                   <Input
@@ -79,7 +88,9 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                   />
                 </div>
+
                 {error && <p className="text-sm text-destructive">{error}</p>}
+
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Entrando..." : "Entrar"}
                 </Button>

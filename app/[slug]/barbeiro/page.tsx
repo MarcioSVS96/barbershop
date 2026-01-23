@@ -3,16 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { DashboardStats } from "@/components/dashboard-stats"
 import { AppointmentsList } from "@/components/appointments-list"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  LogOut,
-  Scissors,
-  LayoutDashboard,
-  CalendarDays,
-  Briefcase,
-  Clock,
-  DollarSign,
-  Settings,
-} from "lucide-react"
+import { LogOut, Scissors, LayoutDashboard, CalendarDays, Briefcase, Clock, DollarSign, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { ServiceManagement } from "@/components/service-management"
@@ -21,7 +12,6 @@ import { BarbershopManagement } from "@/components/barbershop-management"
 import { ProfileManagement } from "@/components/profile-management"
 import type { BarbershopSettings } from "@/lib/types"
 
-// (opcional, mas recomendado para páginas com auth/tenant)
 export const dynamic = "force-dynamic"
 
 export default async function DashboardPage({
@@ -37,27 +27,38 @@ export default async function DashboardPage({
     error,
   } = await supabase.auth.getUser()
 
-  if (error || !user) redirect("/auth/login")
+  if (error) redirect("/auth/login?reason=slugbarbeiro_getuser_error")
+  if (!user) redirect("/auth/login?reason=slugbarbeiro_no_user")
 
   // resolve a barbearia pela rota
-  const { data: shop } = await supabase
+  const { data: shop, error: shopError } = await supabase
     .from("barbershop_settings")
     .select("*")
     .eq("slug", slug)
     .single()
 
+  if (shopError) notFound()
   if (!shop) notFound()
+
   const barbershopId = shop.id as string
 
   // checa membership
-  const { data: membership } = await supabase
+  const { data: membership, error: membershipError } = await supabase
     .from("barbershop_members")
     .select("role")
     .eq("user_id", user.id)
     .eq("barbershop_id", barbershopId)
     .maybeSingle()
 
-  if (!membership) redirect("/auth/login")
+  if (membershipError) {
+    console.error("[/barbeiro] membershipError:", membershipError)
+    redirect("/auth/login?reason=slugbarbeiro_membership_error")
+  }
+
+  if (!membership) {
+    // usuário logado mas sem vínculo com essa barbearia
+    redirect("/auth/login?reason=slugbarbeiro_no_membership")
+  }
 
   const today = new Date().toISOString().split("T")[0]
 
@@ -100,6 +101,17 @@ export default async function DashboardPage({
     .order("name", { ascending: true })
 
   const settings: BarbershopSettings | null = (shop as BarbershopSettings) ?? null
+  const publicUrlFromPath = (path: string | null) => {
+    if (!path) return ""
+    if (path.startsWith("http://") || path.startsWith("https://")) return path
+    const { data } = supabase.storage.from("barbershop-assets").getPublicUrl(path)
+    return data.publicUrl
+  }
+  const rawLogoUrl = publicUrlFromPath(settings?.logo_url || "")
+  const logoUrl =
+    rawLogoUrl && settings?.updated_at
+      ? `${rawLogoUrl}${rawLogoUrl.includes("?") ? "&" : "?"}v=${new Date(settings.updated_at).getTime()}`
+      : rawLogoUrl
 
   const todayAppointments = appointments?.filter((apt) => apt.appointment_date === today) || []
   const pendingAppointments = appointments?.filter((apt) => apt.status === "pending") || []
@@ -121,9 +133,9 @@ export default async function DashboardPage({
         <div className="container mx-auto flex flex-col md:flex-row items-start md:items-center justify-between px-4 py-4">
           <div className="flex w-full items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary overflow-hidden">
-              {settings?.logo_url ? (
+              {logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={settings.logo_url} alt="Logo" className="h-full w-full object-cover" />
+                <img src={logoUrl} alt="Logo" className="h-full w-full object-cover" />
               ) : (
                 <Scissors className="h-5 w-5 text-primary-foreground" />
               )}
@@ -213,12 +225,7 @@ export default async function DashboardPage({
           </TabsContent>
 
           <TabsContent value="financial" className="mt-6">
-            <BarbershopManagement
-              barbers={barbers || []}
-              payments={payments || []}
-              today={today}
-              barbershopId={barbershopId}
-            />
+            <BarbershopManagement barbers={barbers || []} payments={payments || []} today={today} barbershopId={barbershopId} />
           </TabsContent>
 
           <TabsContent value="profile" className="mt-6">

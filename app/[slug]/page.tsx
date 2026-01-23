@@ -13,7 +13,7 @@ export default async function PublicBookingPage({
 
   const { data: shop } = await supabase
     .from("barbershop_settings")
-    .select("id, name, description, logo_url, hero_background_url, slug")
+    .select("id, name, description, logo_url, hero_background_url, slug, updated_at")
     .eq("slug", slug)
     .single()
 
@@ -36,8 +36,25 @@ export default async function PublicBookingPage({
 
   const shopName = shop.name || "Barbearia"
   const shopDesc = shop.description || "Agende seu horário online"
-  const logoUrl = shop.logo_url || ""
-  const heroBg = shop.hero_background_url || "/bg-barbearia.jpg"
+  const publicUrlFromPath = (path: string | null) => {
+    if (!path) return ""
+    if (path.startsWith("http://") || path.startsWith("https://")) return path
+    const { data } = supabase.storage.from("barbershop-assets").getPublicUrl(path)
+    return data.publicUrl
+  }
+
+  const cacheBuster = (url: string | null, updatedAt?: string | null) => {
+    if (!url) return ""
+    if (!updatedAt) return url
+    const hasQuery = url.includes("?")
+    const version = new Date(updatedAt).getTime()
+    return `${url}${hasQuery ? "&" : "?"}v=${version}`
+  }
+
+  const logoUrl = cacheBuster(publicUrlFromPath(shop.logo_url), shop.updated_at)
+  const heroBg = shop.hero_background_url
+    ? cacheBuster(publicUrlFromPath(shop.hero_background_url), shop.updated_at)
+    : "/bg-barbearia.jpg"
 
   return (
     <div className="min-h-screen bg-linear-to-b from-background to-muted/20">

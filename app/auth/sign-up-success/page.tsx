@@ -5,7 +5,7 @@ import { Scissors, Mail } from "lucide-react"
 
 export default function SignUpSuccessPage() {
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-gradient-to-b from-background to-muted/20 p-6 md:p-10">
+    <div className="flex min-h-screen w-full items-center justify-center bg-linear-to-b from-background to-muted/20 p-6 md:p-10">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-2">
           <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-primary">
