@@ -9,6 +9,7 @@ function toString(value: FormDataEntryValue | null) {
   return ""
 }
 
+// Mantive (pode ser útil em outros campos), mas para checkbox é melhor usar formData.has(...)
 function toBool(value: FormDataEntryValue | null) {
   return value === "on" || value === "true"
 }
@@ -31,13 +32,16 @@ export async function createBarbershop(formData: FormData) {
   const name = toString(formData.get("name"))
   const slugInput = toString(formData.get("slug"))
   const description = toString(formData.get("description"))
-  const isActive = toBool(formData.get("is_active"))
+
+  // ✅ checkbox: desmarcado => não vem no FormData
+  const isActive = formData.has("is_active")
 
   if (!name) {
     throw new Error("Nome obrigatório.")
   }
 
   const slug = slugInput || slugify(name)
+
   const payload = {
     id: crypto.randomUUID(),
     name,
@@ -52,7 +56,10 @@ export async function createBarbershop(formData: FormData) {
     throw new Error(error.message)
   }
 
+  // ✅ revalida admin + público
   revalidatePath("/adminmaster")
+  revalidatePath("/")
+  revalidatePath(`/${slug}`)
 }
 
 export async function updateBarbershop(formData: FormData) {
@@ -63,11 +70,26 @@ export async function updateBarbershop(formData: FormData) {
   const name = toString(formData.get("name"))
   const slug = toString(formData.get("slug"))
   const description = toString(formData.get("description"))
-  const isActive = toBool(formData.get("is_active"))
+
+  // ✅ checkbox: desmarcado => não vem no FormData
+  const isActive = formData.has("is_active")
 
   if (!id || !name || !slug) {
     throw new Error("Dados obrigatórios ausentes.")
   }
+
+  // ✅ pega slug antigo para revalidar a rota antiga também (caso tenha mudado)
+  const { data: currentRow, error: currentError } = await admin
+    .from("barbershop_settings")
+    .select("slug")
+    .eq("id", id)
+    .maybeSingle()
+
+  if (currentError) {
+    throw new Error(currentError.message)
+  }
+
+  const oldSlug = currentRow?.slug || null
 
   const payload = {
     name,
@@ -82,7 +104,11 @@ export async function updateBarbershop(formData: FormData) {
     throw new Error(error.message)
   }
 
+  // ✅ revalida admin + público
   revalidatePath("/adminmaster")
+  revalidatePath("/")
+  if (oldSlug) revalidatePath(`/${oldSlug}`)
+  revalidatePath(`/${slug}`)
 }
 
 export async function deleteBarbershop(formData: FormData) {
@@ -94,12 +120,28 @@ export async function deleteBarbershop(formData: FormData) {
     throw new Error("ID obrigatório.")
   }
 
+  // ✅ pega slug antes de deletar para revalidar a rota pública
+  const { data: currentRow, error: currentError } = await admin
+    .from("barbershop_settings")
+    .select("slug")
+    .eq("id", id)
+    .maybeSingle()
+
+  if (currentError) {
+    throw new Error(currentError.message)
+  }
+
+  const oldSlug = currentRow?.slug || null
+
   const { error } = await admin.from("barbershop_settings").delete().eq("id", id)
   if (error) {
     throw new Error(error.message)
   }
 
+  // ✅ revalida admin + público
   revalidatePath("/adminmaster")
+  revalidatePath("/")
+  if (oldSlug) revalidatePath(`/${oldSlug}`)
 }
 
 export async function createBarbershopUser(formData: FormData) {

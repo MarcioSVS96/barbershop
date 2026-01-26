@@ -11,11 +11,18 @@ export default async function PublicBookingPage({
   const supabase = await createClient()
   const { slug } = await params
 
-  const { data: shop } = await supabase
+  // ✅ FIX: só permite rota pública se a barbearia estiver ativa
+  const { data: shop, error: shopError } = await supabase
     .from("barbershop_settings")
-    .select("id, name, description, logo_url, hero_background_url, slug, updated_at")
+    .select("id, name, description, logo_url, hero_background_url, slug, updated_at, is_active")
     .eq("slug", slug)
-    .single()
+    .eq("is_active", true)
+    .maybeSingle()
+
+  if (shopError) {
+    // opcional: log em dev
+    console.error("[public] shopError:", shopError)
+  }
 
   if (!shop) notFound()
 
@@ -36,6 +43,7 @@ export default async function PublicBookingPage({
 
   const shopName = shop.name || "Barbearia"
   const shopDesc = shop.description || "Agende seu horário online"
+
   const publicUrlFromPath = (path: string | null) => {
     if (!path) return ""
     if (path.startsWith("http://") || path.startsWith("https://")) return path
