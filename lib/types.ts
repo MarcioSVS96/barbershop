@@ -59,7 +59,9 @@ export interface BarbershopSettings {
   id: string
   name: string
   description: string | null
+  slug?: string | null
   logo_url: string | null
   hero_background_url: string | null
   updated_at: string
+  is_active?: boolean | null
 }

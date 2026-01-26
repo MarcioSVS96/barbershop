@@ -39,7 +39,7 @@ export default function LoginPage() {
       }
 
       // ✅ vai para a “ponte” que resolve o slug do usuário
-      router.replace("/barbeiro")
+      router.replace("/auth/redirect")
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erro ao fazer login")
     } finally {
