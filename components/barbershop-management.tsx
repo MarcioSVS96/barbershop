@@ -16,11 +16,17 @@ import { Calendar } from "@/components/ui/calendar"
 
 import type { Barber } from "@/lib/types"
 
+type ShopRole = "owner" | "staff"
+
 interface BarbershopManagementProps {
   barbershopId: string
   barbers: Barber[]
   payments: any[]
   today: string // "yyyy-MM-dd"
+
+  // ✅ novo: necessário pra travar financeiro no staff
+  role?: ShopRole
+  myBarberId?: string | null
 }
 
 const statusColors: Record<string, string> = {
@@ -42,20 +48,38 @@ export function BarbershopManagement({
   barbers: initialBarbers,
   payments,
   today,
+  role = "owner",
+  myBarberId = null,
 }: BarbershopManagementProps) {
+  const supabase = createClient()
+
+  const isStaff = role === "staff"
+
   const [barbers, setBarbers] = useState<Barber[]>(initialBarbers)
-  const [selectedBarberId, setSelectedBarberId] = useState<string>(initialBarbers.length > 0 ? initialBarbers[0].id : "")
+
+  // ✅ id selecionado (owner escolhe; staff é travado)
+  const [selectedBarberId, setSelectedBarberId] = useState<string>(() => {
+    if (isStaff) return myBarberId || ""
+    return initialBarbers.length > 0 ? initialBarbers[0].id : ""
+  })
+
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
 
   // ✅ agendamentos do dia selecionado
   const [selectedDateAppointments, setSelectedDateAppointments] = useState<any[]>([])
   const [isLoadingAppointments, setIsLoadingAppointments] = useState(false)
 
-  const supabase = createClient()
-
   // Mantém a lista em sincronia se o server atualizar (router.refresh no page)
   useEffect(() => {
     setBarbers(initialBarbers)
+
+    // ✅ staff: força o barbeiro dele (mesmo que o server mande errado)
+    if (isStaff) {
+      setSelectedBarberId(myBarberId || "")
+      return
+    }
+
+    // ✅ owner: mantém seleção válida
     if (initialBarbers.length > 0 && !initialBarbers.some((b) => b.id === selectedBarberId)) {
       setSelectedBarberId(initialBarbers[0].id)
     }
@@ -63,12 +87,19 @@ export function BarbershopManagement({
       setSelectedBarberId("")
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialBarbers])
+  }, [initialBarbers, isStaff, myBarberId])
 
-  const selectedBarberPayments = useMemo(
-    () => payments.filter((p) => p.appointments?.barber_id === selectedBarberId),
-    [payments, selectedBarberId],
-  )
+  // ✅ payments filtrados pelo barbeiro selecionado
+  const selectedBarberPayments = useMemo(() => {
+    const base = payments.filter((p) => p.appointments?.barber_id === selectedBarberId)
+
+    // ✅ guard extra: se staff, nunca deixa “vazar” outro barbeiro
+    if (isStaff && myBarberId) {
+      return base.filter((p) => p.appointments?.barber_id === myBarberId)
+    }
+
+    return base
+  }, [payments, selectedBarberId, isStaff, myBarberId])
 
   const todayDate = new Date(today)
   const currentYear = todayDate.getFullYear()
@@ -103,6 +134,12 @@ export function BarbershopManagement({
         return
       }
 
+      // ✅ staff: impede buscar dados de outro barbeiro
+      if (isStaff && myBarberId && selectedBarberId !== myBarberId) {
+        setSelectedDateAppointments([])
+        return
+      }
+
       setIsLoadingAppointments(true)
       try {
         const { data, error } = await supabase
@@ -114,7 +151,7 @@ export function BarbershopManagement({
             services(*)
           `,
           )
-          .eq("barbershop_id", barbershopId) // ✅ multi-tenant
+          .eq("barbershop_id", barbershopId)
           .eq("barber_id", selectedBarberId)
           .eq("appointment_date", selectedDateStr)
           .order("appointment_time", { ascending: true })
@@ -130,7 +167,7 @@ export function BarbershopManagement({
     }
 
     run()
-  }, [supabase, barbershopId, selectedBarberId, selectedDateStr])
+  }, [supabase, barbershopId, selectedBarberId, selectedDateStr, isStaff, myBarberId])
 
   // MONTHLY REVENUE (CURRENT YEAR ONLY, ALL MONTHS)
   const monthlyRevenueData = useMemo(() => {
@@ -169,29 +206,59 @@ export function BarbershopManagement({
 
   const BAR_MAX_PX = 160
 
+  // ✅ label do selecionado
+  const selectedBarberName = useMemo(() => {
+    const b = barbers.find((x) => x.id === selectedBarberId)
+    return b?.name || "Barbeiro"
+  }, [barbers, selectedBarberId])
+
+  // ✅ staff sem barberId = não deveria nem estar aqui
+  if (isStaff && !myBarberId) {
+    return (
+      <Card className="border-muted/60 shadow-sm">
+        <CardHeader>
+          <CardTitle>Financeiro</CardTitle>
+          <CardDescription>Seu perfil não está vinculado a um barbeiro. Contate o administrador.</CardDescription>
+        </CardHeader>
+      </Card>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <Card className="border-muted/60 shadow-sm">
         <CardHeader className="space-y-3">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1">
-              <CardTitle className="text-lg sm:text-xl">Relatório Financeiro por Barbeiro</CardTitle>
-              <CardDescription>Visualize o desempenho individual e o faturamento por data</CardDescription>
+              <CardTitle className="text-lg sm:text-xl">Relatório Financeiro</CardTitle>
+              <CardDescription>
+                {isStaff
+                  ? `Visualize apenas o seu desempenho (${selectedBarberName})`
+                  : "Visualize o desempenho individual e o faturamento por data"}
+              </CardDescription>
             </div>
 
+            {/* ✅ owner escolhe; staff fica travado (sem select) */}
             <div className="w-full sm:w-64">
-              <Select value={selectedBarberId} onValueChange={setSelectedBarberId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um barbeiro" />
-                </SelectTrigger>
-                <SelectContent>
-                  {barbers.map((barber) => (
-                    <SelectItem key={barber.id} value={barber.id}>
-                      {barber.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {isStaff ? (
+                <div className="rounded-md border bg-muted/10 px-3 py-2 text-sm">
+                  <div className="text-xs text-muted-foreground">Barbeiro</div>
+                  <div className="font-medium">{selectedBarberName}</div>
+                </div>
+              ) : (
+                <Select value={selectedBarberId} onValueChange={setSelectedBarberId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um barbeiro" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {barbers.map((barber) => (
+                      <SelectItem key={barber.id} value={barber.id}>
+                        {barber.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -292,13 +359,10 @@ export function BarbershopManagement({
                                 </div>
 
                                 <div className="mt-1 text-sm text-muted-foreground">
-                                  {apt.services?.name ?? "Serviço"} • R${" "}
-                                  {Number(apt.service_price_at_booking || 0).toFixed(2)}
+                                  {apt.services?.name ?? "Serviço"} • R$ {Number(apt.service_price_at_booking || 0).toFixed(2)}
                                 </div>
 
-                                {apt.notes ? (
-                                  <div className="mt-1 text-xs text-muted-foreground">Obs: {apt.notes}</div>
-                                ) : null}
+                                {apt.notes ? <div className="mt-1 text-xs text-muted-foreground">Obs: {apt.notes}</div> : null}
                               </div>
                             ))}
                           </div>
@@ -313,9 +377,7 @@ export function BarbershopManagement({
               <Card className="border-muted/60 shadow-sm">
                 <CardHeader className="space-y-1">
                   <CardTitle className="text-base">Lucro mensal ({currentYear})</CardTitle>
-                  <CardDescription>
-                    Mostra todos os meses (Jan–Dez) e o total do ano para o barbeiro selecionado
-                  </CardDescription>
+                  <CardDescription>Mostra todos os meses (Jan–Dez) e o total do ano</CardDescription>
                 </CardHeader>
 
                 <CardContent>
@@ -367,7 +429,7 @@ export function BarbershopManagement({
               </Card>
             </div>
           ) : (
-            <p className="text-muted-foreground">Selecione um barbeiro para ver os dados</p>
+            <p className="text-muted-foreground">Nenhum barbeiro disponível para exibir dados.</p>
           )}
         </CardContent>
       </Card>

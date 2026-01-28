@@ -284,7 +284,7 @@ export function BookingForm({ services, barbers, barbershopId }: BookingFormProp
         service_id: selectedService,
         appointment_date: dateStr,
         appointment_time: selectedTime,
-        status: "pending",
+        status: "confirmed",
         notes: notes || null,
         service_price_at_booking: service.price,
         service_duration_at_booking: service.duration,
@@ -366,22 +366,6 @@ export function BookingForm({ services, barbers, barbershopId }: BookingFormProp
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="barber">Barbeiro</Label>
-            <Select value={selectedBarber} onValueChange={handleBarberChange} required>
-              <SelectTrigger id="barber">
-                <SelectValue placeholder="Selecione um barbeiro" />
-              </SelectTrigger>
-              <SelectContent>
-                {barbers.map((barber) => (
-                  <SelectItem key={barber.id} value={barber.id}>
-                    {barber.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="service">Serviço</Label>
             <Select value={selectedService} onValueChange={handleServiceChange} required>
               <SelectTrigger id="service">
@@ -396,6 +380,22 @@ export function BookingForm({ services, barbers, barbershopId }: BookingFormProp
                         R$ {service.price.toFixed(2)} • {service.duration}min
                       </span>
                     </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="barber">Barbeiro</Label>
+            <Select value={selectedBarber} onValueChange={handleBarberChange} required>
+              <SelectTrigger id="barber">
+                <SelectValue placeholder="Selecione um barbeiro" />
+              </SelectTrigger>
+              <SelectContent>
+                {barbers.map((barber) => (
+                  <SelectItem key={barber.id} value={barber.id}>
+                    {barber.name}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { createClient } from "@/lib/supabase/client"
-import { Clock, Save, Plus, Trash2, CalendarDays } from "lucide-react"
+import { Clock, Save, Plus, Trash2, CalendarDays, Lock } from "lucide-react"
 
 export type BreakItem = { start: string; end: string }
 
@@ -21,6 +21,8 @@ export interface Availability {
   is_active: boolean
   breaks?: BreakItem[]
 }
+
+type UserRole = "owner" | "staff"
 
 const DAYS = [
   { id: 0, label: "Domingo" },
@@ -35,14 +37,20 @@ const DAYS = [
 interface AvailabilityManagementProps {
   availability: Availability[]
   barbershopId: string
+  role?: UserRole // ✅ NEW
 }
 
-export function AvailabilityManagement({ availability: initialAvailability, barbershopId }: AvailabilityManagementProps) {
+export function AvailabilityManagement({
+  availability: initialAvailability,
+  barbershopId,
+  role = "owner",
+}: AvailabilityManagementProps) {
   const router = useRouter()
   const { toast } = useToast()
   const supabase = useMemo(() => createClient(), [])
 
   const [isLoading, setIsLoading] = useState(false)
+  const isReadOnly = role === "staff"
 
   const [items, setItems] = useState(() => {
     const initialMap = new Map(initialAvailability.map((item) => [item.day_of_week, item]))
@@ -66,10 +74,12 @@ export function AvailabilityManagement({ availability: initialAvailability, barb
   const activeDaysCount = useMemo(() => items.filter((i) => i.is_active).length, [items])
 
   const handleUpdate = (dayId: number, field: string, value: any) => {
+    if (isReadOnly) return
     setItems((prev) => prev.map((item) => (item.day_of_week === dayId ? { ...item, [field]: value } : item)))
   }
 
   const addBreak = (dayId: number) => {
+    if (isReadOnly) return
     setItems((prev) =>
       prev.map((item) =>
         item.day_of_week === dayId
@@ -80,6 +90,7 @@ export function AvailabilityManagement({ availability: initialAvailability, barb
   }
 
   const removeBreak = (dayId: number, index: number) => {
+    if (isReadOnly) return
     setItems((prev) =>
       prev.map((item) =>
         item.day_of_week === dayId ? { ...item, breaks: item.breaks?.filter((_, i) => i !== index) } : item,
@@ -88,6 +99,7 @@ export function AvailabilityManagement({ availability: initialAvailability, barb
   }
 
   const updateBreak = (dayId: number, index: number, field: "start" | "end", value: string) => {
+    if (isReadOnly) return
     setItems((prev) =>
       prev.map((item) =>
         item.day_of_week === dayId
@@ -101,6 +113,15 @@ export function AvailabilityManagement({ availability: initialAvailability, barb
   }
 
   const handleSave = async () => {
+    if (isReadOnly) {
+      toast({
+        title: "Sem permissão",
+        description: "Seu perfil não pode alterar o horário de funcionamento.",
+        variant: "destructive",
+      })
+      return
+    }
+
     if (!barbershopId) {
       toast({
         title: "Erro de contexto",
@@ -147,7 +168,15 @@ export function AvailabilityManagement({ availability: initialAvailability, barb
               <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/40">
                 <CalendarDays className="h-4 w-4 text-muted-foreground" />
               </div>
-              <CardTitle className="text-lg sm:text-xl">Horários de Atendimento</CardTitle>
+              <CardTitle className="text-lg sm:text-xl flex items-center gap-2">
+                Horários de Atendimento
+                {isReadOnly ? (
+                  <span className="inline-flex items-center gap-1 rounded-md border bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
+                    <Lock className="h-3 w-3" />
+                    Somente leitura
+                  </span>
+                ) : null}
+              </CardTitle>
             </div>
             <CardDescription>Configure os dias e horários disponíveis para agendamento</CardDescription>
           </div>
@@ -158,10 +187,12 @@ export function AvailabilityManagement({ availability: initialAvailability, barb
               <span className="font-medium">{activeDaysCount}/7</span>
             </div>
 
-            <Button onClick={handleSave} disabled={isLoading} className="w-full sm:w-auto">
-              <Save className="mr-2 h-4 w-4" />
-              {isLoading ? "Salvando..." : "Salvar"}
-            </Button>
+            {!isReadOnly ? (
+              <Button onClick={handleSave} disabled={isLoading} className="w-full sm:w-auto">
+                <Save className="mr-2 h-4 w-4" />
+                {isLoading ? "Salvando..." : "Salvar"}
+              </Button>
+            ) : null}
           </div>
         </div>
 
@@ -187,6 +218,7 @@ export function AvailabilityManagement({ availability: initialAvailability, barb
                     <Switch
                       checked={item.is_active}
                       onCheckedChange={(checked) => handleUpdate(item.day_of_week, "is_active", checked)}
+                      disabled={isReadOnly}
                     />
                     <div className="leading-tight">
                       <Label className={item.is_active ? "font-medium" : "text-muted-foreground"}>{item.label}</Label>
@@ -206,7 +238,7 @@ export function AvailabilityManagement({ availability: initialAvailability, barb
                       type="time"
                       value={item.start_time}
                       onChange={(e) => handleUpdate(item.day_of_week, "start_time", e.target.value)}
-                      disabled={!item.is_active}
+                      disabled={!item.is_active || isReadOnly}
                       className="w-27.5"
                     />
                     <span className="text-xs text-muted-foreground">até</span>
@@ -214,7 +246,7 @@ export function AvailabilityManagement({ availability: initialAvailability, barb
                       type="time"
                       value={item.end_time}
                       onChange={(e) => handleUpdate(item.day_of_week, "end_time", e.target.value)}
-                      disabled={!item.is_active}
+                      disabled={!item.is_active || isReadOnly}
                       className="w-27.5"
                     />
                   </div>
@@ -226,9 +258,11 @@ export function AvailabilityManagement({ availability: initialAvailability, barb
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm font-medium">Intervalos (pausas)</Label>
-                      <Button variant="outline" size="sm" className="h-8" onClick={() => addBreak(item.day_of_week)}>
-                        <Plus className="mr-2 h-3 w-3" /> Adicionar
-                      </Button>
+                      {!isReadOnly ? (
+                        <Button variant="outline" size="sm" className="h-8" onClick={() => addBreak(item.day_of_week)}>
+                          <Plus className="mr-2 h-3 w-3" /> Adicionar
+                        </Button>
+                      ) : null}
                     </div>
 
                     {item.breaks?.length === 0 ? (
@@ -245,6 +279,7 @@ export function AvailabilityManagement({ availability: initialAvailability, barb
                                 value={String(brk.start).slice(0, 5)}
                                 onChange={(e) => updateBreak(item.day_of_week, idx, "start", e.target.value)}
                                 className="h-9 w-27.5"
+                                disabled={isReadOnly}
                               />
                               <span className="text-xs text-muted-foreground">até</span>
                               <Input
@@ -252,18 +287,21 @@ export function AvailabilityManagement({ availability: initialAvailability, barb
                                 value={String(brk.end).slice(0, 5)}
                                 onChange={(e) => updateBreak(item.day_of_week, idx, "end", e.target.value)}
                                 className="h-9 w-27.5"
+                                disabled={isReadOnly}
                               />
                             </div>
 
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-9 w-9 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                              onClick={() => removeBreak(item.day_of_week, idx)}
-                              aria-label="Remover intervalo"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {!isReadOnly ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-9 w-9 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                onClick={() => removeBreak(item.day_of_week, idx)}
+                                aria-label="Remover intervalo"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            ) : null}
                           </div>
                         ))}
                       </div>

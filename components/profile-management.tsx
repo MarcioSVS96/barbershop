@@ -1,5 +1,4 @@
-﻿// C:\Projetos\barbershop\components\profile-management.tsx
-"use client"
+﻿"use client"
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -14,12 +13,16 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 import type { BarbershopSettings, Barber } from "@/lib/types"
-import { Edit, Plus, Trash2, UserRound } from "lucide-react"
+import { Edit, Plus, Trash2, UserRound, Lock } from "lucide-react"
+
+type ShopRole = "owner" | "staff"
 
 interface ProfileManagementProps {
-  barbershopId: string // ✅ necessário para multi-tenant (storage e settings)
+  barbershopId: string
   settings: BarbershopSettings | null
   barbers: Barber[]
+  role?: ShopRole
+  myBarberId?: string | null
 }
 
 const BUCKET = "barbershop-assets"
@@ -57,10 +60,20 @@ function publicUrlFromPath(supabase: ReturnType<typeof createClient>, path: stri
   return data.publicUrl
 }
 
-export function ProfileManagement({ barbershopId, settings, barbers: initialBarbers }: ProfileManagementProps) {
+export function ProfileManagement({
+  barbershopId,
+  settings,
+  barbers: initialBarbers,
+  role = "owner",
+  myBarberId = null,
+}: ProfileManagementProps) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const { toast } = useToast()
+
+  const isStaff = role === "staff"
+  const canManageShopProfile = !isStaff // ✅ staff não edita perfil da barbearia
+  const canManageBarbers = !isStaff // ✅ staff não faz CRUD da equipe
 
   // =========================
   // PERFIL (settings)
@@ -78,15 +91,6 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
   const [heroPath, setHeroPath] = useState(settings?.hero_background_url || "")
 
   useEffect(() => {
-    console.groupCollapsed("[ProfileManagement] settings changed")
-    console.log("settings?.id:", settings?.id)
-    console.log("settings?.name:", settings?.name)
-    console.log("settings?.updated_at:", (settings as any)?.updated_at)
-    console.log("settings?.logo_url:", settings?.logo_url)
-    console.log("settings?.hero_background_url:", settings?.hero_background_url)
-    console.log("barbershopId prop:", barbershopId)
-    console.groupEnd()
-
     setName(settings?.name || "")
     setDescription(settings?.description || "")
     setLogoPath(settings?.logo_url || "")
@@ -101,7 +105,6 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
     logoPath !== (settings?.logo_url || "") ||
     heroPath !== (settings?.hero_background_url || "")
 
-  // ✅ multi-tenant storage path (versionado)
   function storagePath(type: "logo" | "hero", ext: string) {
     const version = Date.now()
     return `shops/${barbershopId}/profile/${type}-${version}.${ext}`
@@ -114,27 +117,13 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
     const ext = safeExt(file)
     const path = storagePath(type, ext)
 
-    console.groupCollapsed(`[ProfileManagement] uploadImage(${type})`)
-    console.log("file.name:", file.name)
-    console.log("file.type:", file.type)
-    console.log("file.size:", file.size)
-    console.log("computed ext:", ext)
-    console.log("upload path:", path)
-    console.groupEnd()
-
     const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-      // como o path muda, não sobrescreve o mesmo arquivo
       upsert: true,
       contentType: file.type,
-      cacheControl: "0", // 🔥 evita cache enquanto você testa
+      cacheControl: "0",
     })
 
-    if (error) {
-      console.error("[ProfileManagement] upload error:", error)
-      throw error
-    }
-
-    console.log(`[ProfileManagement] upload ok: ${path}`)
+    if (error) throw error
     return path
   }
 
@@ -142,6 +131,11 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
     const file = e.target.files?.[0]
     e.target.value = ""
     if (!file) return
+
+    if (!canManageShopProfile) {
+      toast({ title: "Sem permissão", description: "Apenas o dono pode alterar a logo.", variant: "destructive" })
+      return
+    }
 
     setIsUploadingLogo(true)
     try {
@@ -161,6 +155,15 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
     e.target.value = ""
     if (!file) return
 
+    if (!canManageShopProfile) {
+      toast({
+        title: "Sem permissão",
+        description: "Apenas o dono pode alterar o background.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsUploadingHero(true)
     try {
       const path = await uploadImage(file, "hero")
@@ -175,6 +178,15 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
   }
 
   async function handleSaveProfile() {
+    if (!canManageShopProfile) {
+      toast({
+        title: "Sem permissão",
+        description: "Apenas o dono pode salvar alterações do perfil da barbearia.",
+        variant: "destructive",
+      })
+      return
+    }
+
     if (!name.trim()) {
       toast({ title: "Nome obrigatório", description: "Digite o nome da barbearia.", variant: "destructive" })
       return
@@ -182,30 +194,10 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
 
     setIsSaving(true)
 
-    // ✅ id mais confiável: o que veio do DB (settings.id)
     const targetId = settings?.id ?? barbershopId
 
     try {
-      // =========================
-      // DEBUG / LOGS
-      // =========================
-      const userRes = await supabase.auth.getUser()
-
-      console.groupCollapsed("[ProfileManagement] handleSaveProfile DEBUG")
-      console.log("barbershopId prop:", barbershopId)
-      console.log("settings?.id:", settings?.id)
-      console.log("targetId (id usado no update):", targetId)
-      console.log("auth.user.id:", userRes.data?.user?.id)
-      console.log("auth.user.email:", userRes.data?.user?.email)
-      console.log("name:", name)
-      console.log("description:", description)
-      console.log("logoPath:", logoPath)
-      console.log("heroPath:", heroPath)
-      console.groupEnd()
-
-      if (!targetId) {
-        throw new Error("ID alvo ausente. settings.id e barbershopId vieram vazios.")
-      }
+      if (!targetId) throw new Error("ID alvo ausente. settings.id e barbershopId vieram vazios.")
 
       const payload = {
         name: name.trim(),
@@ -215,68 +207,16 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
         updated_at: new Date().toISOString(),
       }
 
-      // ✅ 0) checa membership (se falhar aqui, é 100% RLS/policy)
-      const uid = userRes.data?.user?.id
-      if (uid) {
-        const mem = await supabase
-          .from("barbershop_members")
-          .select("id, role, user_id, barbershop_id")
-          .eq("user_id", uid)
-          .eq("barbershop_id", targetId)
-          .maybeSingle()
+      const upd = await supabase.from("barbershop_settings").update(payload).eq("id", targetId).select("id, updated_at")
 
-        console.groupCollapsed("[ProfileManagement] MEMBERSHIP CHECK")
-        console.log("mem.data:", mem.data)
-        console.log("mem.error:", mem.error)
-        console.groupEnd()
-      }
-
-      // ✅ 1) SELECT antes do UPDATE
-      const pre = await supabase
-        .from("barbershop_settings")
-        .select("id, name, updated_at, logo_url, hero_background_url")
-        .eq("id", targetId)
-        .maybeSingle()
-
-      console.groupCollapsed("[ProfileManagement] PRECHECK barbershop_settings")
-      console.log("pre.data:", pre.data)
-      console.log("pre.error:", pre.error)
-      console.groupEnd()
-
-      if (!pre.data) {
-        if (pre.error) {
-          throw new Error(`Não foi possível ler barbershop_settings (provável RLS). Detalhe: ${pre.error.message}`)
-        }
-        throw new Error("Não encontrei barbershop_settings com esse ID (provável ID incorreto chegando no componente).")
-      }
-
-      // ✅ 2) UPDATE
-      const upd = await supabase
-        .from("barbershop_settings")
-        .update(payload)
-        .eq("id", targetId)
-        .select("id, updated_at, logo_url, hero_background_url")
-
-      console.groupCollapsed("[ProfileManagement] UPDATE RESULT")
-      console.log("payload:", payload)
-      console.log("data:", upd.data)
-      console.log("error:", upd.error)
-      console.groupEnd()
-
-      if (upd.error) {
-        throw upd.error
-      }
+      if (upd.error) throw upd.error
 
       const row = upd.data?.[0]
       if (!row) {
-        throw new Error(
-          "UPDATE retornou 0 linhas. Isso normalmente é RLS bloqueando UPDATE ou bloqueando o SELECT pós-update (returning).",
-        )
+        throw new Error("UPDATE retornou 0 linhas (provável RLS ou SELECT pós-update bloqueado).")
       }
 
       toast({ title: "Perfil salvo", description: "As configurações foram aplicadas com sucesso." })
-      setLogoPath(row.logo_url || "")
-      setHeroPath(row.hero_background_url || "")
       router.refresh()
     } catch (err: any) {
       console.error("[ProfileManagement] handleSaveProfile error:", err)
@@ -309,7 +249,17 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
     setBarbers(initialBarbers)
   }, [initialBarbers])
 
+  const canEditThisBarber = (barberId: string) => {
+    if (canManageBarbers) return true // owner
+    // staff: pode editar apenas o próprio
+    return !!myBarberId && barberId === myBarberId
+  }
+
   const openAddBarberDialog = () => {
+    if (!canManageBarbers) {
+      toast({ title: "Sem permissão", description: "Apenas o dono pode adicionar barbeiros.", variant: "destructive" })
+      return
+    }
     setEditingBarber(null)
     setNewBarberName("")
     setNewBarberSpecialty("")
@@ -317,6 +267,14 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
   }
 
   const openEditBarberDialog = (barber: Barber) => {
+    if (!canEditThisBarber(barber.id)) {
+      toast({
+        title: "Sem permissão",
+        description: "Você só pode editar seu próprio perfil.",
+        variant: "destructive",
+      })
+      return
+    }
     setEditingBarber(barber)
     setNewBarberName(barber.name)
     setNewBarberSpecialty(barber.specialty || "")
@@ -326,6 +284,16 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
   const handleSaveBarber = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newBarberName.trim()) return
+
+    // owner pode criar/editar qualquer; staff só edita o próprio
+    if (editingBarber && !canEditThisBarber(editingBarber.id)) {
+      toast({ title: "Sem permissão", description: "Você não pode editar esse barbeiro.", variant: "destructive" })
+      return
+    }
+    if (!editingBarber && !canManageBarbers) {
+      toast({ title: "Sem permissão", description: "Apenas o dono pode criar barbeiros.", variant: "destructive" })
+      return
+    }
 
     setIsSavingBarber(true)
     try {
@@ -374,15 +342,16 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
   }
 
   const handleDeleteBarber = async (id: string) => {
+    if (!canManageBarbers) {
+      toast({ title: "Sem permissão", description: "Apenas o dono pode excluir barbeiros.", variant: "destructive" })
+      return
+    }
+
     if (!confirm("Tem certeza que deseja excluir este barbeiro?")) return
 
     setIsSavingBarber(true)
     try {
-      const { error } = await supabase
-        .from("barbers")
-        .delete()
-        .eq("id", id)
-        .eq("barbershop_id", barbershopId)
+      const { error } = await supabase.from("barbers").delete().eq("id", id).eq("barbershop_id", barbershopId)
 
       if (error) throw error
 
@@ -414,12 +383,22 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
                 </div>
                 <CardTitle className="text-lg sm:text-xl">Gerenciar Barbeiros</CardTitle>
               </div>
-              <CardDescription>Adicione, edite ou remova profissionais da equipe</CardDescription>
+
+              <CardDescription className="flex items-center gap-2">
+                {canManageBarbers ? (
+                  <>Adicione, edite ou remova profissionais da equipe</>
+                ) : (
+                  <>
+                    <Lock className="h-4 w-4" />
+                    Equipe bloqueada para staff (você pode editar apenas seu perfil)
+                  </>
+                )}
+              </CardDescription>
             </div>
 
             <Dialog open={isBarberDialogOpen} onOpenChange={setIsBarberDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={openAddBarberDialog} className="w-full sm:w-auto">
+                <Button onClick={openAddBarberDialog} className="w-full sm:w-auto" disabled={!canManageBarbers}>
                   <Plus className="mr-2 h-4 w-4" />
                   Adicionar Barbeiro
                 </Button>
@@ -464,38 +443,49 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
 
         <CardContent>
           <div className="space-y-3">
-            {barbers.map((barber) => (
-              <div
-                key={barber.id}
-                className="flex items-center justify-between gap-3 rounded-xl border bg-muted/10 p-4 transition-colors hover:bg-muted/20"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{barber.name}</p>
-                  {barber.specialty && <p className="truncate text-sm text-muted-foreground">{barber.specialty}</p>}
-                </div>
+            {barbers.map((barber) => {
+              const canEdit = canEditThisBarber(barber.id)
 
-                <div className="flex shrink-0 gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => openEditBarberDialog(barber)}
-                    disabled={isSavingBarber}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
+              return (
+                <div
+                  key={barber.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border bg-muted/10 p-4 transition-colors hover:bg-muted/20"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">
+                      {barber.name}
+                      {isStaff && myBarberId && barber.id === myBarberId ? (
+                        <span className="ml-2 text-xs text-muted-foreground">(você)</span>
+                      ) : null}
+                    </p>
+                    {barber.specialty && <p className="truncate text-sm text-muted-foreground">{barber.specialty}</p>}
+                  </div>
 
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDeleteBarber(barber.id)}
-                    disabled={isSavingBarber}
-                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex shrink-0 gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openEditBarberDialog(barber)}
+                      disabled={isSavingBarber || !canEdit}
+                      title={canEdit ? "Editar" : "Sem permissão"}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeleteBarber(barber.id)}
+                      disabled={isSavingBarber || !canManageBarbers}
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      title={canManageBarbers ? "Excluir" : "Sem permissão"}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
 
             {barbers.length === 0 && <p className="text-center text-muted-foreground">Nenhum barbeiro cadastrado.</p>}
           </div>
@@ -505,17 +495,32 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
       {/* ✅ PERFIL DA BARBEARIA */}
       <Card className="border-muted/60 shadow-sm">
         <CardHeader>
-          <CardTitle>Perfil da Barbearia</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            Perfil da Barbearia
+            {!canManageShopProfile ? <Lock className="h-4 w-4 text-muted-foreground" /> : null}
+          </CardTitle>
+
           <CardDescription>
-            Você pode enviar as imagens e ver o preview. Elas só são aplicadas quando clicar em{" "}
-            <strong>Salvar alterações</strong>.
+            {canManageShopProfile ? (
+              <>
+                Você pode enviar as imagens e ver o preview. Elas só são aplicadas quando clicar em{" "}
+                <strong>Salvar alterações</strong>.
+              </>
+            ) : (
+              <>Somente o dono pode alterar nome/descrição/logo/background.</>
+            )}
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-6">
           <div className="space-y-2">
             <Label>Nome</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Barbearia Premium" />
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ex: Barbearia Premium"
+              disabled={!canManageShopProfile}
+            />
           </div>
 
           <div className="space-y-2">
@@ -525,6 +530,7 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Ex: Agende seu horário online"
               rows={3}
+              disabled={!canManageShopProfile}
             />
           </div>
 
@@ -537,7 +543,7 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
               </div>
 
               <div className="flex gap-2">
-                <Button asChild variant="outline" disabled={isUploadingLogo}>
+                <Button asChild variant="outline" disabled={isUploadingLogo || !canManageShopProfile}>
                   <label className="cursor-pointer">
                     {isUploadingLogo ? "Enviando..." : "Enviar logo"}
                     <input type="file" className="hidden" accept="image/*" onChange={handleUploadLogo} />
@@ -552,11 +558,7 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
                   Abrir
                 </Button>
 
-                <Button
-                  variant="outline"
-                  disabled={!logoPublicUrl}
-                  onClick={() => downloadFile(logoPublicUrl, "logo")}
-                >
+                <Button variant="outline" disabled={!logoPublicUrl} onClick={() => downloadFile(logoPublicUrl, "logo")}>
                   Baixar
                 </Button>
               </div>
@@ -565,11 +567,7 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
             <div className="rounded-xl border bg-muted/10 p-4">
               {logoPublicUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={logoPreviewSrc}
-                  alt="Preview da logo"
-                  className="h-24 w-24 rounded-lg border bg-background object-cover"
-                />
+                <img src={logoPreviewSrc} alt="Preview da logo" className="h-24 w-24 rounded-lg border bg-background object-cover" />
               ) : (
                 <div className="flex h-24 w-24 items-center justify-center rounded-lg border bg-background text-xs text-muted-foreground">
                   Sem logo
@@ -587,7 +585,7 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
               </div>
 
               <div className="flex gap-2">
-                <Button asChild variant="outline" disabled={isUploadingHero}>
+                <Button asChild variant="outline" disabled={isUploadingHero || !canManageShopProfile}>
                   <label className="cursor-pointer">
                     {isUploadingHero ? "Enviando..." : "Enviar background"}
                     <input type="file" className="hidden" accept="image/*" onChange={handleUploadHero} />
@@ -615,11 +613,7 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
             <div className="rounded-xl border bg-muted/10 p-4">
               {heroPublicUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={heroPreviewSrc}
-                  alt="Preview do background"
-                  className="h-40 w-full rounded-lg border bg-background object-cover"
-                />
+                <img src={heroPreviewSrc} alt="Preview do background" className="h-40 w-full rounded-lg border bg-background object-cover" />
               ) : (
                 <div className="flex h-40 w-full items-center justify-center rounded-lg border bg-background text-sm text-muted-foreground">
                   Sem background
@@ -629,7 +623,7 @@ export function ProfileManagement({ barbershopId, settings, barbers: initialBarb
           </div>
 
           <div className="flex justify-end">
-            <Button onClick={handleSaveProfile} disabled={!hasChanges || isSaving}>
+            <Button onClick={handleSaveProfile} disabled={!canManageShopProfile || !hasChanges || isSaving}>
               {isSaving ? "Salvando..." : "Salvar alterações"}
             </Button>
           </div>

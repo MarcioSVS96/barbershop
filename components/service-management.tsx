@@ -15,19 +15,26 @@ import { Switch } from "@/components/ui/switch"
 
 import { useToast } from "@/hooks/use-toast"
 import { createClient } from "@/lib/supabase/client"
-import { Plus, Edit, Clock, DollarSign, Trash2 } from "lucide-react"
+import { Plus, Edit, Clock, DollarSign, Trash2, Lock } from "lucide-react"
 import type { Service } from "@/lib/types"
+
+type UserRole = "owner" | "staff"
 
 interface ServiceManagementProps {
   services: Service[]
   barbershopId: string
+  role?: UserRole // ✅ NEW
 }
 
 /**
  * ✅ Named export
  * Use: import { ServiceManagement } from "@/components/service-management"
  */
-export function ServiceManagement({ services: initialServices, barbershopId }: ServiceManagementProps) {
+export function ServiceManagement({
+  services: initialServices,
+  barbershopId,
+  role = "owner",
+}: ServiceManagementProps) {
   const router = useRouter()
   const { toast } = useToast()
 
@@ -37,6 +44,8 @@ export function ServiceManagement({ services: initialServices, barbershopId }: S
   const [isLoading, setIsLoading] = useState(false)
   const [editingService, setEditingService] = useState<Service | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+
+  const isReadOnly = role === "staff"
 
   // Form state
   const [name, setName] = useState("")
@@ -57,11 +66,19 @@ export function ServiceManagement({ services: initialServices, barbershopId }: S
   }
 
   const openCreateDialog = () => {
+    if (isReadOnly) {
+      toast({ title: "Sem permissão", description: "Seu perfil não pode criar serviços.", variant: "destructive" })
+      return
+    }
     resetForm()
     setIsDialogOpen(true)
   }
 
   const openEditDialog = (service: Service) => {
+    if (isReadOnly) {
+      toast({ title: "Sem permissão", description: "Seu perfil não pode editar serviços.", variant: "destructive" })
+      return
+    }
     setEditingService(service)
     setName(service.name ?? "")
     setPrice(String(service.price ?? ""))
@@ -72,6 +89,11 @@ export function ServiceManagement({ services: initialServices, barbershopId }: S
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (isReadOnly) {
+      toast({ title: "Sem permissão", description: "Seu perfil não pode alterar serviços.", variant: "destructive" })
+      return
+    }
 
     if (!barbershopId) {
       toast({
@@ -120,11 +142,9 @@ export function ServiceManagement({ services: initialServices, barbershopId }: S
         if (error) throw error
 
         setServices((prev) => prev.map((s) => (s.id === editingService.id ? { ...s, ...baseData } : s)))
-
         toast({ title: "Serviço atualizado", description: "O serviço foi atualizado com sucesso." })
       } else {
         const payload = { ...baseData, is_active: true }
-
         const { data, error } = await supabase.from("services").insert(payload).select().single()
         if (error) throw error
 
@@ -148,7 +168,16 @@ export function ServiceManagement({ services: initialServices, barbershopId }: S
   }
 
   const toggleServiceStatus = async (serviceId: string, currentStatus: boolean) => {
+    if (isReadOnly) {
+      toast({
+        title: "Sem permissão",
+        description: "Seu perfil não pode ativar/desativar serviços.",
+        variant: "destructive",
+      })
+      return
+    }
     if (!barbershopId) return
+
     setIsLoading(true)
     try {
       const { error } = await supabase
@@ -182,6 +211,10 @@ export function ServiceManagement({ services: initialServices, barbershopId }: S
   }
 
   const deleteService = async (serviceId: string) => {
+    if (isReadOnly) {
+      toast({ title: "Sem permissão", description: "Seu perfil não pode excluir serviços.", variant: "destructive" })
+      return
+    }
     if (!barbershopId) return
     if (!confirm("Tem certeza que deseja excluir este serviço?")) return
 
@@ -191,7 +224,6 @@ export function ServiceManagement({ services: initialServices, barbershopId }: S
       if (error) throw error
 
       setServices((prev) => prev.filter((s) => s.id !== serviceId))
-
       toast({ title: "Serviço excluído", description: "O serviço foi removido com sucesso." })
       router.refresh()
     } catch (error: any) {
@@ -209,86 +241,96 @@ export function ServiceManagement({ services: initialServices, barbershopId }: S
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <CardTitle>Gestão de Serviços</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              Gestão de Serviços
+              {isReadOnly ? (
+                <Badge variant="secondary" className="inline-flex items-center gap-1">
+                  <Lock className="h-3 w-3" />
+                  Somente leitura
+                </Badge>
+              ) : null}
+            </CardTitle>
             <CardDescription>Gerencie os serviços oferecidos pela barbearia</CardDescription>
           </div>
 
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={openCreateDialog}>
-                <Plus className="mr-2 h-4 w-4" />
-                Novo Serviço
-              </Button>
-            </DialogTrigger>
-
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{editingService ? "Editar Serviço" : "Novo Serviço"}</DialogTitle>
-                <DialogDescription>
-                  {editingService
-                    ? "Atualize as informações do serviço. Agendamentos existentes não serão afetados."
-                    : "Crie um novo serviço para oferecer aos clientes."}
-                </DialogDescription>
-              </DialogHeader>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome do Serviço</Label>
-                  <Input
-                    id="name"
-                    placeholder="Ex: Corte de Cabelo"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="price">Preço (R$)</Label>
-                    <Input
-                      id="price"
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="duration">Duração (minutos)</Label>
-                    <Input
-                      id="duration"
-                      type="number"
-                      placeholder="30"
-                      value={duration}
-                      onChange={(e) => setDuration(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="description">Descrição (opcional)</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Descreva o serviço..."
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? "Salvando..." : editingService ? "Atualizar Serviço" : "Criar Serviço"}
+          {!isReadOnly ? (
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={openCreateDialog}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Novo Serviço
                 </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{editingService ? "Editar Serviço" : "Novo Serviço"}</DialogTitle>
+                  <DialogDescription>
+                    {editingService
+                      ? "Atualize as informações do serviço. Agendamentos existentes não serão afetados."
+                      : "Crie um novo serviço para oferecer aos clientes."}
+                  </DialogDescription>
+                </DialogHeader>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Nome do Serviço</Label>
+                    <Input
+                      id="name"
+                      placeholder="Ex: Corte de Cabelo"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="price">Preço (R$)</Label>
+                      <Input
+                        id="price"
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={price}
+                        onChange={(e) => setPrice(e.target.value)}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="duration">Duração (minutos)</Label>
+                      <Input
+                        id="duration"
+                        type="number"
+                        placeholder="30"
+                        value={duration}
+                        onChange={(e) => setDuration(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Descrição (opcional)</Label>
+                    <Textarea
+                      id="description"
+                      placeholder="Descreva o serviço..."
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading ? "Salvando..." : editingService ? "Atualizar Serviço" : "Criar Serviço"}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          ) : null}
         </div>
       </CardHeader>
 
@@ -299,7 +341,9 @@ export function ServiceManagement({ services: initialServices, barbershopId }: S
               <div className="flex-1 space-y-1">
                 <div className="flex items-center gap-2">
                   <h4 className="font-semibold">{service.name}</h4>
-                  <Badge variant={service.is_active ? "default" : "secondary"}>{service.is_active ? "Ativo" : "Inativo"}</Badge>
+                  <Badge variant={service.is_active ? "default" : "secondary"}>
+                    {service.is_active ? "Ativo" : "Inativo"}
+                  </Badge>
                 </div>
 
                 {service.description && <p className="text-sm text-muted-foreground">{service.description}</p>}
@@ -316,21 +360,28 @@ export function ServiceManagement({ services: initialServices, barbershopId }: S
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" onClick={() => openEditDialog(service)} disabled={isLoading}>
-                  <Edit className="h-4 w-4" />
-                </Button>
+              {/* ✅ AÇÕES: owner only */}
+              {!isReadOnly ? (
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => openEditDialog(service)} disabled={isLoading}>
+                    <Edit className="h-4 w-4" />
+                  </Button>
 
-                <Button size="sm" variant="outline" onClick={() => deleteService(service.id)} disabled={isLoading}>
-                  <Trash2 className="h-4 w-4 text-red-500" />
-                </Button>
+                  <Button size="sm" variant="outline" onClick={() => deleteService(service.id)} disabled={isLoading}>
+                    <Trash2 className="h-4 w-4 text-red-500" />
+                  </Button>
 
-                <Switch
-                  checked={!!service.is_active}
-                  onCheckedChange={() => toggleServiceStatus(service.id, !!service.is_active)}
-                  disabled={isLoading}
-                />
-              </div>
+                  <Switch
+                    checked={!!service.is_active}
+                    onCheckedChange={() => toggleServiceStatus(service.id, !!service.is_active)}
+                    disabled={isLoading}
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Switch checked={!!service.is_active} disabled />
+                </div>
+              )}
             </div>
           ))}
 

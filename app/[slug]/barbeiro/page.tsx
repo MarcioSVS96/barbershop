@@ -14,6 +14,8 @@ import type { BarbershopSettings } from "@/lib/types"
 
 export const dynamic = "force-dynamic"
 
+type ShopRole = "owner" | "staff"
+
 export default async function DashboardPage({
   params,
 }: {
@@ -33,19 +35,19 @@ export default async function DashboardPage({
   // resolve a barbearia pela rota
   const { data: shop, error: shopError } = await supabase
     .from("barbershop_settings")
-    .select("*")
+    .select("*, is_active")
     .eq("slug", slug)
     .single()
 
-  if (shopError) notFound()
-  if (!shop) notFound()
+  if (shopError || !shop) notFound()
+  if (!shop.is_active) redirect("/auth/login?reason=shop_inactive")
 
   const barbershopId = shop.id as string
 
-  // checa membership
+  // checa membership (✅ agora pega role + barber_id)
   const { data: membership, error: membershipError } = await supabase
     .from("barbershop_members")
-    .select("role")
+    .select("role, barber_id")
     .eq("user_id", user.id)
     .eq("barbershop_id", barbershopId)
     .maybeSingle()
@@ -56,13 +58,22 @@ export default async function DashboardPage({
   }
 
   if (!membership) {
-    // usuário logado mas sem vínculo com essa barbearia
     redirect("/auth/login?reason=slugbarbeiro_no_membership")
+  }
+
+  const role = (membership.role as ShopRole) || "owner"
+  const isStaff = role === "staff"
+  const myBarberId = (membership.barber_id as string | null) ?? null
+
+  // staff precisa ter barber_id
+  if (isStaff && !myBarberId) {
+    redirect("/auth/login?reason=slugbarbeiro_staff_missing_barber_id")
   }
 
   const today = new Date().toISOString().split("T")[0]
 
-  const { data: appointments } = await supabase
+  // ✅ staff deve ver só agendamentos dele (o RLS pode reforçar isso também)
+  const appointmentsQuery = supabase
     .from("appointments")
     .select(
       `
@@ -76,29 +87,63 @@ export default async function DashboardPage({
     .order("appointment_date", { ascending: true })
     .order("appointment_time", { ascending: true })
 
-  const { data: payments } = await supabase
+  const { data: appointments, error: appointmentsError } = isStaff
+    ? await appointmentsQuery.eq("barber_id", myBarberId!)
+    : await appointmentsQuery
+
+  if (appointmentsError) {
+    console.error("[/barbeiro] appointmentsError:", appointmentsError)
+  }
+
+  // ✅ payments: staff só deve ver os pagamentos dele
+  const paymentsQuery = supabase
     .from("payments")
     .select("*, appointments(*)")
     .eq("barbershop_id", barbershopId)
     .order("payment_date", { ascending: false })
 
-  const { data: services } = await supabase
+  const { data: payments, error: paymentsError } = isStaff
+    ? await paymentsQuery.eq("barber_id", myBarberId!)
+    : await paymentsQuery
+
+  if (paymentsError) {
+    console.error("[/barbeiro] paymentsError:", paymentsError)
+  }
+
+  // ✅ services: staff só visualiza (CRUD travado no componente)
+  const { data: services, error: servicesError } = await supabase
     .from("services")
     .select("*")
     .eq("barbershop_id", barbershopId)
     .order("name", { ascending: true })
 
-  const { data: availability } = await supabase
+  if (servicesError) {
+    console.error("[/barbeiro] servicesError:", servicesError)
+  }
+
+  // ✅ availability: staff pode visualizar, mas não editar (travaremos no componente)
+  const { data: availability, error: availabilityError } = await supabase
     .from("availability")
     .select("*")
     .eq("barbershop_id", barbershopId)
     .order("day_of_week", { ascending: true })
 
-  const { data: barbers } = await supabase
+  if (availabilityError) {
+    console.error("[/barbeiro] availabilityError:", availabilityError)
+  }
+
+  // ✅ barbers: staff deve receber apenas o próprio barbeiro (pra evitar vazar lista)
+  const barbersQuery = supabase
     .from("barbers")
     .select("*")
     .eq("barbershop_id", barbershopId)
     .order("name", { ascending: true })
+
+  const { data: barbers, error: barbersError } = isStaff ? await barbersQuery.eq("id", myBarberId!) : await barbersQuery
+
+  if (barbersError) {
+    console.error("[/barbeiro] barbersError:", barbersError)
+  }
 
   const settings: BarbershopSettings | null = (shop as BarbershopSettings) ?? null
   const publicUrlFromPath = (path: string | null) => {
@@ -107,6 +152,7 @@ export default async function DashboardPage({
     const { data } = supabase.storage.from("barbershop-assets").getPublicUrl(path)
     return data.publicUrl
   }
+
   const rawLogoUrl = publicUrlFromPath(settings?.logo_url || "")
   const logoUrl =
     rawLogoUrl && settings?.updated_at
@@ -124,7 +170,7 @@ export default async function DashboardPage({
   const currentMonth = new Date().toISOString().slice(0, 7)
   const monthlyRevenue =
     payments
-      ?.filter((payment) => payment.appointments?.appointment_date.startsWith(currentMonth))
+      ?.filter((payment) => payment.appointments?.appointment_date?.startsWith(currentMonth))
       .reduce((sum, payment) => sum + Number(payment.amount), 0) || 0
 
   return (
@@ -144,7 +190,7 @@ export default async function DashboardPage({
             <div>
               <h1 className="text-xl font-bold">Painel do Barbeiro</h1>
               <p className="text-sm text-muted-foreground">
-                {settings?.name ?? "Barbearia"} • {user.email}
+                {settings?.name ?? "Barbearia"} • {user.email} • {role}
               </p>
             </div>
 
@@ -217,19 +263,32 @@ export default async function DashboardPage({
           </TabsContent>
 
           <TabsContent value="services" className="mt-6">
-            <ServiceManagement services={services || []} barbershopId={barbershopId} />
+            <ServiceManagement services={services || []} barbershopId={barbershopId} role={role} />
           </TabsContent>
 
           <TabsContent value="availability" className="mt-6">
-            <AvailabilityManagement availability={availability || []} barbershopId={barbershopId} />
+            <AvailabilityManagement availability={availability || []} barbershopId={barbershopId} role={role} />
           </TabsContent>
 
           <TabsContent value="financial" className="mt-6">
-            <BarbershopManagement barbers={barbers || []} payments={payments || []} today={today} barbershopId={barbershopId} />
+            <BarbershopManagement
+              barbers={barbers || []}
+              payments={payments || []}
+              today={today}
+              barbershopId={barbershopId}
+              role={role}
+              myBarberId={myBarberId}
+            />
           </TabsContent>
 
           <TabsContent value="profile" className="mt-6">
-            <ProfileManagement settings={settings} barbers={barbers || []} barbershopId={barbershopId} />
+            <ProfileManagement
+              settings={settings}
+              barbers={barbers || []}
+              barbershopId={barbershopId}
+              role={role}
+              myBarberId={myBarberId}
+            />
           </TabsContent>
         </Tabs>
       </main>
