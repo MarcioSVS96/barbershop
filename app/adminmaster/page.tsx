@@ -9,7 +9,16 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { createBarbershop, createBarbershopUser, deleteBarbershop, updateBarbershop } from "./actions"
+import {
+  createBarbershop,
+  createBarbershopUser,
+  deleteBarbershop,
+  updateBarbershop,
+  prepareDeleteMemberAndUser,
+  deleteMemberAndUser,
+} from "./actions"
+
+
 
 export const dynamic = "force-dynamic"
 
@@ -56,7 +65,14 @@ function messageFromCode(code: string | null) {
 export default async function AdminMasterPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ msg?: string; tab?: string }>
+  searchParams?: Promise<{
+  msg?: string
+  tab?: string
+  confirm?: string
+  user_id?: string
+  barbershop_id?: string
+}>
+
 }) {
   const { user } = await requireMasterAdmin()
   const admin = createAdminClient()
@@ -515,7 +531,33 @@ export default async function AdminMasterPage({
             <CardTitle>Perfis das barbearias</CardTitle>
             <CardDescription>Owners e staff vinculados a cada barbearia.</CardDescription>
           </CardHeader>
+
           <CardContent className="space-y-4">
+            {/* ✅ CONFIRMAÇÃO SERVER-SAFE (sem JS) */}
+            {resolved?.confirm === "1" && resolved?.user_id && resolved?.barbershop_id ? (
+              <div className="rounded-xl border bg-card p-4">
+                <div className="text-sm font-semibold">Confirmar exclusão</div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Isso vai remover o vínculo com a barbearia e <b>DELETAR o usuário do Auth</b>.
+                  Ele não conseguirá mais logar.
+                </p>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <form action={deleteMemberAndUser} className="inline-flex">
+                    <input type="hidden" name="user_id" value={String(resolved.user_id)} />
+                    <input type="hidden" name="barbershop_id" value={String(resolved.barbershop_id)} />
+                    <Button type="submit" className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      Confirmar exclusão
+                    </Button>
+                  </form>
+
+                  <Button asChild variant="outline">
+                    <Link href="/adminmaster?tab=perfis">Cancelar</Link>
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
             {membersList.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhum perfil cadastrado ainda.</p>
             ) : (
@@ -523,17 +565,32 @@ export default async function AdminMasterPage({
                 <Table>
                   <TableHeader className="bg-muted/40">
                     <TableRow>
-                      <TableHead className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Barbearia</TableHead>
-                      <TableHead className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Email</TableHead>
-                      <TableHead className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Perfil</TableHead>
-                      <TableHead className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Barbeiro</TableHead>
+                      <TableHead className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Barbearia
+                      </TableHead>
+                      <TableHead className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Email
+                      </TableHead>
+                      <TableHead className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Perfil
+                      </TableHead>
+                      <TableHead className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Barbeiro
+                      </TableHead>
+                      <TableHead className="text-right text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Ações
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
+
                   <TableBody className="[&>tr:nth-child(even)]:bg-muted/20">
                     {membersList.map((member) => {
                       const shop = shopsById.get(member.barbershop_id)
                       const email = userEmailById.get(member.user_id) || member.user_id
                       const barberName = member.barber_id ? barbersById.get(member.barber_id) : null
+
+                      // ✅ owner aparece como "Administrador"
+                      const barberLabel = member.role === "owner" ? "Administrador" : barberName || "Barbeiro não vinculado"
 
                       return (
                         <TableRow key={`${member.user_id}-${member.barbershop_id}`} className="transition hover:bg-muted/40">
@@ -541,9 +598,11 @@ export default async function AdminMasterPage({
                             <div className="text-sm font-medium">{shop?.name || shop?.slug || member.barbershop_id}</div>
                             <div className="text-xs text-muted-foreground">/{shop?.slug || "-"}</div>
                           </TableCell>
+
                           <TableCell>
                             <div className="text-sm font-medium">{email}</div>
                           </TableCell>
+
                           <TableCell>
                             {member.role === "owner" ? (
                               <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20">Owner</Badge>
@@ -551,12 +610,20 @@ export default async function AdminMasterPage({
                               <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20">Staff</Badge>
                             )}
                           </TableCell>
+
                           <TableCell>
-                            {member.role === "staff" ? (
-                              <span className="text-sm font-medium">{barberName || "Barbeiro nÃ£o vinculado"}</span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">â€”</span>
-                            )}
+                            <span className="text-sm font-medium">{barberLabel}</span>
+                          </TableCell>
+
+                          <TableCell className="text-right">
+                            {/* ✅ botão vai para "tela" de confirmação via querystring */}
+                            <form action={prepareDeleteMemberAndUser} className="inline-flex">
+                              <input type="hidden" name="user_id" value={member.user_id} />
+                              <input type="hidden" name="barbershop_id" value={member.barbershop_id} />
+                              <Button type="submit" variant="outline" size="sm" className="text-destructive">
+                                Excluir perfil
+                              </Button>
+                            </form>
                           </TableCell>
                         </TableRow>
                       )
