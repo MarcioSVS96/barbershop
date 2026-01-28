@@ -12,11 +12,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   createBarbershop,
   createBarbershopUser,
-  deleteBarbershop,
-  updateBarbershop,
   prepareDeleteMemberAndUser,
   deleteMemberAndUser,
 } from "./actions"
+import { BarbershopRow } from "./barbershop-row"
 
 
 
@@ -136,7 +135,7 @@ export default async function AdminMasterPage({
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.08),transparent_55%),linear-gradient(to_bottom,hsl(var(--background)),hsl(var(--muted)/0.2))]">
-      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-4 py-8 lg:grid-cols-[260px_minmax(0,1fr)]">
+      <div className="mx-auto grid max-w-screen-2xl grid-cols-1 gap-6 px-4 py-8 lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="order-last flex flex-col gap-6 rounded-2xl border bg-card/80 p-6 shadow-sm lg:order-first lg:sticky lg:top-8 lg:self-start">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary">
@@ -454,69 +453,15 @@ export default async function AdminMasterPage({
                   </TableHeader>
                   <TableBody className="[&>tr:nth-child(even)]:bg-muted/20">
                     {shopsList.map((shop) => {
-                      const formId = `shop-${shop.id}`
                       const shopBarbers = barbersByShop.get(shop.id) || []
 
                       return (
-                        <TableRow key={shop.id} className="transition hover:bg-muted/40">
-                          <TableCell>
-                            <form id={formId} action={updateBarbershop} className="space-y-2">
-                              <input type="hidden" name="id" value={shop.id} />
-                              <Input name="name" defaultValue={shop.name || ""} placeholder="Nome da barbearia" />
-                              <Textarea name="description" defaultValue={shop.description || ""} rows={2} />
-                              <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <input type="checkbox" name="is_active" defaultChecked={shop.is_active !== false} className="h-4 w-4" />
-                                Ativa no site
-                              </label>
-                              <div className="flex gap-2">
-                                <Button type="submit" size="sm">
-                                  Salvar
-                                </Button>
-                              </div>
-                            </form>
-                          </TableCell>
-
-                          <TableCell>
-                            <Input name="slug" form={formId} defaultValue={shop.slug || ""} placeholder="slug" />
-                            <p className="mt-1 text-xs text-muted-foreground">/{shop.slug || "-"}</p>
-                          </TableCell>
-
-                          <TableCell>
-                            {shop.is_active !== false ? (
-                              <Badge className="bg-green-500/10 text-green-600 border-green-500/20">Ativa</Badge>
-                            ) : (
-                              <Badge className="bg-zinc-500/10 text-zinc-500 border-zinc-500/20">Inativa</Badge>
-                            )}
-                          </TableCell>
-
-                          <TableCell>
-                            <div className="text-sm font-medium">{memberCount.get(shop.id) || 0}</div>
-                            <div className="text-xs text-muted-foreground">membro(s)</div>
-                          </TableCell>
-
-                          <TableCell>
-                            {shopBarbers.length === 0 ? (
-                              <div className="text-xs text-muted-foreground">Nenhum barbeiro</div>
-                            ) : (
-                              <div className="space-y-1">
-                                <div className="text-sm font-medium">{shopBarbers.length}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  {shopBarbers.slice(0, 3).map((barber) => barber.name).join(", ")}
-                                  {shopBarbers.length > 3 ? "..." : ""}
-                                </div>
-                              </div>
-                            )}
-                          </TableCell>
-
-                          <TableCell className="text-right">
-                            <form action={deleteBarbershop}>
-                              <input type="hidden" name="id" value={shop.id} />
-                              <Button type="submit" variant="outline" size="sm">
-                                Excluir
-                              </Button>
-                            </form>
-                          </TableCell>
-                        </TableRow>
+                        <BarbershopRow
+                          key={shop.id}
+                          shop={shop}
+                          memberCount={memberCount.get(shop.id) || 0}
+                          shopBarbers={shopBarbers}
+                        />
                       )
                     })}
                   </TableBody>
