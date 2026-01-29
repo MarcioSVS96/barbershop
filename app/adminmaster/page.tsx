@@ -1,5 +1,5 @@
-import Link from "next/link"
-import { Building2, LayoutDashboard, ShieldCheck, Store, UserPlus, Users } from "lucide-react"
+﻿import Link from "next/link"
+import { Building2, LayoutDashboard, ShieldCheck, Store, UserPlus, Users, Trash2, Pencil } from "lucide-react"
 import { requireMasterAdmin } from "@/lib/admin/master"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,9 +14,12 @@ import {
   createBarbershopUser,
   prepareDeleteMemberAndUser,
   deleteMemberAndUser,
+  updateBarbershopUser,
 } from "./actions"
 import { BarbershopRow } from "./barbershop-row"
 import { CreationMessage } from "./creation-message"
+import { DeleteProfileDialog } from "./delete-profile-dialog"
+import { EditProfileDialog } from "./edit-profile-dialog"
 
 
 
@@ -63,6 +66,14 @@ function messageFromCode(code: string | null) {
       return { title: "Perfil excluído", description: "O perfil foi removido com sucesso." }
     case "slug_exists":
       return { title: "Slug já cadastrado", description: "Use outro slug ou ajuste o nome da barbearia." }
+    case "profile_updated":
+      return { title: "Perfil atualizado", description: "As alterações foram salvas com sucesso." }
+    case "profile_exists":
+      return { title: "Perfil já existe", description: "Esse usuário já está vinculado a essa barbearia." }
+    case "profile_update_missing_fields":
+      return { title: "Dados incompletos", description: "Preencha email, barbearia e perfil." }
+    case "profile_update_not_found":
+      return { title: "Perfil não encontrado", description: "Não foi possível localizar o perfil para atualizar." }
     default:
       return null
   }
@@ -75,6 +86,7 @@ export default async function AdminMasterPage({
   msg?: string
   tab?: string
   confirm?: string
+  edit?: string
   user_id?: string
   barbershop_id?: string
 }>
@@ -89,10 +101,22 @@ export default async function AdminMasterPage({
   const allowedTabs = new Set(["visao-geral", "nova-barbearia", "nova-conta", "barbearias-cadastradas", "perfis"])
   const activeTab = allowedTabs.has(tabParam) ? tabParam : "visao-geral"
   const msg = messageFromCode(msgCode)
+  const overlayPerfisCodes = new Set([
+    "profile_deleted",
+    "profile_updated",
+    "profile_exists",
+    "profile_update_missing_fields",
+    "profile_update_not_found",
+    "email_exists",
+    "invalid_role",
+  ])
   const showOverlayMessage =
     (msgCode === "barbershop_created" && activeTab === "nova-barbearia") ||
     (msgCode === "user_created" && activeTab === "nova-conta") ||
-    (msgCode === "profile_deleted" && activeTab === "perfis")
+    (activeTab === "perfis" && !!msgCode && overlayPerfisCodes.has(msgCode))
+  const editUserId = resolved.user_id ?? null
+  const editBarbershopId = resolved.barbershop_id ?? null
+  const showEditDialog = resolved.edit === "1" && activeTab === "perfis" && editUserId && editBarbershopId
 
   const { data: shops, error: shopsError } = await admin
     .from("barbershop_settings")
@@ -143,6 +167,15 @@ export default async function AdminMasterPage({
   for (const shop of shopsList) {
     shopsById.set(shop.id, shop)
   }
+
+  const editMember =
+    showEditDialog && editUserId && editBarbershopId
+      ? membersList.find(
+          (member) => member.user_id === editUserId && member.barbershop_id === editBarbershopId,
+        )
+      : null
+  const editEmail = editUserId ? userEmailById.get(editUserId) || editUserId : ""
+  const editRole = editMember?.role ?? "owner"
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.08),transparent_55%),linear-gradient(to_bottom,hsl(var(--background)),hsl(var(--muted)/0.2))]">
@@ -465,29 +498,25 @@ export default async function AdminMasterPage({
           </CardHeader>
 
           <CardContent className="space-y-4">
+            {showEditDialog && editMember ? (
+              <EditProfileDialog
+                userId={String(editUserId)}
+                currentBarbershopId={String(editBarbershopId)}
+                email={editEmail}
+                role={editRole}
+                shops={shopsList}
+                onCloseUrl="/adminmaster?tab=perfis"
+                action={updateBarbershopUser}
+              />
+            ) : null}
             {/* ✅ CONFIRMAÇÃO SERVER-SAFE (sem JS) */}
             {resolved?.confirm === "1" && resolved?.user_id && resolved?.barbershop_id ? (
-              <div className="rounded-xl border bg-card p-4">
-                <div className="text-sm font-semibold">Confirmar exclusão</div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Isso vai remover o vínculo com a barbearia e <b>DELETAR o usuário do Auth</b>.
-                  Ele não conseguirá mais logar.
-                </p>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <form action={deleteMemberAndUser} className="inline-flex">
-                    <input type="hidden" name="user_id" value={String(resolved.user_id)} />
-                    <input type="hidden" name="barbershop_id" value={String(resolved.barbershop_id)} />
-                    <Button type="submit" className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                      Confirmar exclusão
-                    </Button>
-                  </form>
-
-                  <Button asChild variant="outline">
-                    <Link href="/adminmaster?tab=perfis">Cancelar</Link>
-                  </Button>
-                </div>
-              </div>
+              <DeleteProfileDialog
+                userId={String(resolved.user_id)}
+                barbershopId={String(resolved.barbershop_id)}
+                onCloseUrl="/adminmaster?tab=perfis"
+                action={deleteMemberAndUser}
+              />
             ) : null}
 
             {membersList.length === 0 ? (
@@ -548,14 +577,31 @@ export default async function AdminMasterPage({
                           </TableCell>
 
                           <TableCell className="text-right">
-                            {/* ✅ botão vai para "tela" de confirmação via querystring */}
-                            <form action={prepareDeleteMemberAndUser} className="inline-flex">
-                              <input type="hidden" name="user_id" value={member.user_id} />
-                              <input type="hidden" name="barbershop_id" value={member.barbershop_id} />
-                              <Button type="submit" variant="outline" size="sm" className="text-destructive">
-                                Excluir perfil
+                            <div className="inline-flex items-center gap-2">
+                              <Button asChild variant="outline" size="icon" className="h-8 w-8" aria-label="Editar perfil">
+                                <Link
+                                  href={`/adminmaster?tab=perfis&edit=1&user_id=${encodeURIComponent(
+                                    member.user_id,
+                                  )}&barbershop_id=${encodeURIComponent(member.barbershop_id)}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Link>
                               </Button>
-                            </form>
+                              {/* ✅ botão vai para "tela" de confirmação via querystring */}
+                              <form action={prepareDeleteMemberAndUser} className="inline-flex">
+                                <input type="hidden" name="user_id" value={member.user_id} />
+                                <input type="hidden" name="barbershop_id" value={member.barbershop_id} />
+                                <Button
+                                  type="submit"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive"
+                                  aria-label="Excluir perfil"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </form>
+                            </div>
                           </TableCell>
                         </TableRow>
                       )
@@ -571,3 +617,4 @@ export default async function AdminMasterPage({
   </div>
   )
 }
+

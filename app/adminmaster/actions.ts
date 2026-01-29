@@ -220,6 +220,98 @@ export async function createBarbershopUser(formData: FormData) {
 }
 
 /* ============================================================
+   EDITAR PERFIL (OWNER / STAFF)
+============================================================ */
+
+export async function updateBarbershopUser(formData: FormData) {
+  await requireMasterAdmin()
+  const admin = createAdminClient()
+
+  const userId = toString(formData.get("user_id"))
+  const currentBarbershopId = toString(formData.get("current_barbershop_id"))
+  const email = toString(formData.get("email"))
+  const password = toString(formData.get("password"))
+  const barbershopId = toString(formData.get("barbershop_id"))
+  const roleRaw = toString(formData.get("role"))
+
+  if (!userId || !currentBarbershopId || !email || !barbershopId) {
+    redirect("/adminmaster?tab=perfis&msg=profile_update_missing_fields")
+  }
+
+  const role = normalizeRole(roleRaw)
+  if (!role) {
+    redirect("/adminmaster?tab=perfis&msg=invalid_role")
+  }
+
+  const updatePayload: { email: string; password?: string } = { email }
+  if (password) updatePayload.password = password
+
+  const { error: authError } = await admin.auth.admin.updateUserById(userId, updatePayload)
+  if (authError) {
+    const msg = String(authError.message || "").toLowerCase()
+    if (msg.includes("already") || msg.includes("exists") || msg.includes("email")) {
+      redirect("/adminmaster?tab=perfis&msg=email_exists")
+    }
+    throw new Error(authError.message)
+  }
+
+  const { data: memberRow, error: memberRowErr } = await admin
+    .from("barbershop_members")
+    .select("barber_id, barbershop_id")
+    .eq("user_id", userId)
+    .eq("barbershop_id", currentBarbershopId)
+    .maybeSingle()
+
+  if (memberRowErr || !memberRow) {
+    redirect("/adminmaster?tab=perfis&msg=profile_update_not_found")
+  }
+
+  let nextBarberId = memberRow.barber_id
+  const barbershopChanged = memberRow.barbershop_id !== barbershopId
+
+  if (barbershopChanged || (role === "staff" && !nextBarberId)) {
+    const barberName = email.split("@")[0]?.replace(".", " ") || "Barbeiro"
+    const { data: barberData, error: barberError } = await admin
+      .from("barbers")
+      .insert({
+        id: crypto.randomUUID(),
+        name: barberName,
+        barbershop_id: barbershopId,
+      })
+      .select("id")
+      .single()
+
+    if (barberError || !barberData?.id) {
+      throw new Error("Erro ao criar barbeiro automaticamente.")
+    }
+
+    nextBarberId = barberData.id
+  }
+
+  const { error: memberError } = await admin
+    .from("barbershop_members")
+    .update({
+      barbershop_id: barbershopId,
+      role,
+      barber_id: nextBarberId,
+    })
+    .eq("user_id", userId)
+    .eq("barbershop_id", currentBarbershopId)
+
+  if (memberError) {
+    const code = String((memberError as { code?: string }).code || "")
+    const message = String(memberError.message || "").toLowerCase()
+    if (code === "23505" || message.includes("unique")) {
+      redirect("/adminmaster?tab=perfis&msg=profile_exists")
+    }
+    throw new Error(memberError.message)
+  }
+
+  revalidatePath("/adminmaster")
+  redirect("/adminmaster?tab=perfis&msg=profile_updated")
+}
+
+/* ============================================================
    EXCLUIR PERFIL (vínculo + deletar usuário do Auth)
    Regras:
    - remove barbershop_members do (user_id + barbershop_id)
