@@ -1,168 +1,423 @@
-import Link from "next/link"
-import { Scissors } from "lucide-react"
-import { createClient } from "@/lib/supabase/server"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+﻿import Link from "next/link"
+import Image from "next/image"
+import {
+  ArrowRight,
+  CalendarCheck,
+  Check,
+  Clock,
+  LineChart,
+  Scissors,
+  ShieldCheck,
+  Smartphone,
+  Users,
+  Sparkles,
+  MessageCircle,
+} from "lucide-react"
+
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Card, CardContent } from "@/components/ui/card"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
-type Shop = {
-  id: string
-  name: string | null
-  description: string | null
-  logo_url: string | null
-  slug: string | null
-  updated_at: string | null
-  is_active?: boolean | null
-}
-
-type ServiceRow = {
-  id: string
-  name: string
-  price: number
-  duration: number
-  description: string | null
-  barbershop_id: string
-  is_active: boolean
-}
-
-function publicUrlFromPath(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  path: string | null,
-) {
-  if (!path) return ""
-  if (path.startsWith("http://") || path.startsWith("https://")) return path
-  const { data } = supabase.storage.from("barbershop-assets").getPublicUrl(path)
-  return data.publicUrl
-}
-
-export default async function RootPage() {
-  const supabase = await createClient()
-
-  const { data: shops } = await supabase
-    .from("barbershop_settings")
-    .select("id, name, description, logo_url, slug, updated_at, is_active")
-    .order("name", { ascending: true })
-
-  const { data: services } = await supabase
-    .from("services")
-    .select("id, name, price, duration, description, barbershop_id, is_active")
-    .eq("is_active", true)
-    .order("price", { ascending: true })
-
-  const shopsList = (shops || []).filter((shop) => shop.is_active !== false)
-  const servicesList = services || []
-
-  const servicesByShop = new Map<string, ServiceRow[]>()
-  for (const service of servicesList) {
-    const list = servicesByShop.get(service.barbershop_id) || []
-    list.push(service)
-    servicesByShop.set(service.barbershop_id, list)
-  }
-
-  const formatCurrency = new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  })
-
+export default function RootPage() {
   return (
-    <div className="min-h-screen bg-linear-to-b from-background via-background to-muted/30">
-      <header className="border-b bg-card/70 backdrop-blur-sm">
-        <div className="container mx-auto flex flex-col gap-3 px-4 py-8 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-              <Scissors className="h-6 w-6 text-primary-foreground" />
+    <div className="min-h-screen bg-background text-foreground">
+      {/* Top bar */}
+      <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
+          <Link href="/" className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ff3131] text-white">
+              <Scissors className="h-5 w-5" />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">Serviços das Barbearias</h1>
-              <p className="text-sm text-muted-foreground">Escolha uma barbearia e veja os serviços disponíveis</p>
+            <div className="leading-tight">
+              <div className="text-sm font-semibold">Agenda Barber</div>
+              <div className="text-xs text-muted-foreground">Sistema de agendamento</div>
             </div>
-          </div>
+          </Link>
 
-          <Button asChild variant="outline">
-            <Link href="/auth/login">Área administrativa</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" className="hidden sm:inline-flex">
+              <Link href="/auth/login">Área administrativa</Link>
+            </Button>
+            <Button
+              asChild
+              className="bg-[#ff3131] text-white hover:bg-[#ff3131]"
+            >
+              <Link href="/agenda">
+                Testar agenda
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-10">
-        {shopsList.length === 0 ? (
-          <Card className="border-muted/60">
-            <CardHeader>
-              <CardTitle>Nenhuma barbearia ativa</CardTitle>
-              <CardDescription>Cadastre uma barbearia no painel master para aparecer aqui.</CardDescription>
-            </CardHeader>
-          </Card>
-        ) : (
-          <div className="grid gap-6 lg:grid-cols-2">
-            {shopsList.map((shop) => {
-              const shopServices = servicesByShop.get(shop.id) || []
-              const logoUrl = publicUrlFromPath(supabase, shop.logo_url)
-              const shopName = shop.name || "Barbearia"
-              const shopDesc = shop.description || "Serviços profissionais para você"
+      <main className="mx-auto max-w-6xl px-4">
+        {/* HERO */}
+        <section className="relative grid items-center gap-10 py-14 lg:grid-cols-2 lg:py-20">
+          {/* blobs */}
+          <div className="pointer-events-none absolute -top-10 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-[#ff3131]/10 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-10 right-0 h-64 w-64 rounded-full bg-lime-400/10 blur-3xl" />
 
-              return (
-                <Card key={shop.id} className="border-muted/60 shadow-sm">
-                  <CardHeader className="space-y-4">
-                    <div className="flex items-start gap-4">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-muted/30 overflow-hidden">
-                        {logoUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={logoUrl} alt={`Logo ${shopName}`} className="h-full w-full object-cover" />
-                        ) : (
-                          <Scissors className="h-6 w-6 text-muted-foreground" />
-                        )}
-                      </div>
-                      <div className="space-y-1">
-                        <CardTitle className="text-lg">{shopName}</CardTitle>
-                        <CardDescription>{shopDesc}</CardDescription>
-                        {shop.slug ? <Badge variant="outline">/{shop.slug}</Badge> : null}
-                      </div>
-                    </div>
-                  </CardHeader>
+          <div className="relative space-y-6">
+            <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+              Escolha um sistema completo para{" "}
+              <span className="text-[#ff3131]">organizar a agenda</span> da sua barbearia.
+            </h1>
 
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="text-sm font-medium text-muted-foreground">Serviços em destaque</div>
-                      {shopServices.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Nenhum serviço ativo cadastrado.</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {shopServices.slice(0, 4).map((service) => (
-                            <div key={service.id} className="flex items-center justify-between rounded-lg border bg-muted/10 px-3 py-2">
-                              <div>
-                                <p className="text-sm font-medium">{service.name}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {service.duration} min • {service.description || "Atendimento profissional"}
-                                </p>
-                              </div>
-                              <span className="text-sm font-semibold">{formatCurrency.format(service.price || 0)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+            <p className="max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+              Chega de caderninho, confusão de horários e cliente sumindo. Com a Agenda Barber,
+              o cliente agenda em segundos e você controla equipe, disponibilidade e serviços em um só lugar.
+            </p>
 
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="text-xs text-muted-foreground">
-                        {shopServices.length} serviço(s) ativo(s)
-                      </div>
-                      {shop.slug ? (
-                        <Button asChild>
-                          <Link href={`/${shop.slug}`}>Ver agendamentos</Link>
-                        </Button>
-                      ) : (
-                        <Button variant="outline" disabled>
-                          Slug não definido
-                        </Button>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                asChild
+                size="lg"
+                className="bg-[#ff3131] text-white hover:bg-[#ff3131]"
+              >
+                <Link href="/agenda">
+                  Teste grátis na prática
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link href="/auth/login">Sou barbeiro / admin</Link>
+              </Button>
+            </div>
           </div>
-        )}
+        </section>
+
+        {/* Features strip */}
+        <section className="grid gap-4 py-10 md:grid-cols-3">
+          {[
+            {
+              title: "Agendamento online",
+              desc: "Cliente marca sozinho. Você só confirma e atende.",
+              icon: <Smartphone className="h-5 w-5 text-[#ff3131]" />,
+            },
+            {
+              title: "Menos faltas",
+              desc: "Organização + clareza de horários reduz furo.",
+              icon: <ShieldCheck className="h-5 w-5 text-[#ff3131]" />,
+            },
+            {
+              title: "Gestão e relatórios",
+              desc: "Saiba o que vende mais e tome decisões rápidas.",
+              icon: <LineChart className="h-5 w-5 text-[#ff3131]" />,
+            },
+          ].map((f) => (
+            <div
+              key={f.title}
+              className="rounded-3xl border bg-card p-6 shadow-sm"
+            >
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#ff3131]/10">
+                  {f.icon}
+                </div>
+                <div>
+                  <div className="text-base font-semibold">{f.title}</div>
+                  <div className="mt-1 text-sm text-muted-foreground">{f.desc}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </section>
+
+        {/* Tabs like "Soluções" */}
+        <section className="py-12">
+          <div className="grid gap-8 lg:grid-cols-2 lg:items-center">
+            <div className="space-y-3">
+              <h2 className="text-3xl font-bold tracking-tight">
+                Dê adeus à comanda de papel na sua barbearia
+              </h2>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Divida o foco: o cliente agenda, o barbeiro atende e você acompanha o negócio.
+                Tudo fica registrado, organizado e fácil de acessar.
+              </p>
+            </div>
+
+            <Tabs defaultValue="agenda" className="w-full">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="agenda">Agenda</TabsTrigger>
+                <TabsTrigger value="clientes">Clientes</TabsTrigger>
+                <TabsTrigger value="gestao">Gestão</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="agenda" className="mt-4">
+                <div className="rounded-3xl border bg-card p-6 shadow-sm">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ff3131]/10">
+                      <CalendarCheck className="h-6 w-6 text-[#ff3131]" />
+                    </div>
+                    <div>
+                      <div className="text-lg font-semibold">Agenda clara e rápida</div>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Visualize horários por barbeiro, bloqueios e disponibilidade automática.
+                      </p>
+                      <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+                        {[
+                          "Horários configuráveis por dia",
+                          "Pausas e bloqueios rápidos",
+                          "Cliente remarca/cancela com autonomia",
+                        ].map((x) => (
+                          <li key={x} className="flex items-center gap-2">
+                            <Check className="h-4 w-4 text-[#ff3131]" />
+                            {x}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="clientes" className="mt-4">
+                <div className="rounded-3xl border bg-card p-6 shadow-sm">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ff3131]/10">
+                      <Users className="h-6 w-6 text-[#ff3131]" />
+                    </div>
+                    <div>
+                      <div className="text-lg font-semibold">Fidelize com histórico</div>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Saiba quem volta, o que faz e quais serviços vendem mais.
+                      </p>
+                      <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+                        {[
+                          "Histórico de serviços e frequência",
+                          "Atendimento mais pessoal",
+                          "Melhor taxa de retorno",
+                        ].map((x) => (
+                          <li key={x} className="flex items-center gap-2">
+                            <Check className="h-4 w-4 text-[#ff3131]" />
+                            {x}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="gestao" className="mt-4">
+                <div className="rounded-3xl border bg-card p-6 shadow-sm">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ff3131]/10">
+                      <LineChart className="h-6 w-6 text-[#ff3131]" />
+                    </div>
+                    <div>
+                      <div className="text-lg font-semibold">Gestão para crescer</div>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Tenha visão do que acontece na barbearia e organize sua operação.
+                      </p>
+                      <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+                        {[
+                          "Serviços e preços centralizados",
+                          "Performance por barbeiro",
+                          "Organização que reduz retrabalho",
+                        ].map((x) => (
+                          <li key={x} className="flex items-center gap-2">
+                            <Check className="h-4 w-4 text-[#ff3131]" />
+                            {x}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </section>
+
+        {/* Testimonials */}
+        <section className="py-12">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2 className="text-3xl font-bold tracking-tight">Depoimentos</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                O que barbearias ganham quando a agenda vira um sistema.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-8 grid gap-4 lg:grid-cols-3">
+            {[
+              {
+                quote:
+                  "Antes eu perdia tempo respondendo mensagem. Agora o cliente agenda sozinho e eu só atendo.",
+                name: "Lucas Caval",
+                role: "Caval Barber Shop",
+              },
+              {
+                quote:
+                  "A organização dos horários reduziu faltas e melhorou a rotina da equipe. Ficou bem mais profissional.",
+                name: "Rafael Lima",
+                role: "Barbearia Central",
+              },
+              {
+                quote:
+                  "Consegui entender quais serviços vendem mais e ajustar preços. Ajuda muito na gestão.",
+                name: "Thagner Ramos",
+                role: "Cliente (exemplo)",
+              },
+            ].map((t) => (
+              <div key={t.name} className="rounded-3xl border bg-card p-6 shadow-sm">
+                <div className="text-sm text-muted-foreground">“{t.quote}”</div>
+                <div className="mt-4 text-sm font-semibold">{t.name}</div>
+                <div className="text-xs text-muted-foreground">{t.role}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* FAQ */}
+        <section className="py-12">
+          <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
+            <div>
+              <h2 className="text-3xl font-bold tracking-tight">Tire todas as suas dúvidas</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Respostas diretas, sem enrolação.
+              </p>
+
+              <div className="mt-6 rounded-3xl border bg-[#ff3131] p-7 text-white">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15">
+                    <MessageCircle className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="text-base font-semibold">
+                      Quer ver funcionando em 30 segundos?
+                    </div>
+                    <div className="mt-1 text-sm text-white/85">
+                      Abra a agenda pública e teste como o cliente agendaria.
+                    </div>
+                    <Button
+                      asChild
+                      size="sm"
+                      className="mt-4 bg-lime-400 text-black hover:bg-lime-300"
+                    >
+                      <Link href="/agenda">Abrir agenda</Link>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <Accordion type="single" collapsible className="w-full">
+              {[
+                {
+                  q: "Como funciona o agendamento online?",
+                  a: "O cliente escolhe serviço, data e horário disponível. O sistema respeita a disponibilidade, pausas e regras do barbeiro.",
+                },
+                {
+                  q: "O cliente consegue remarcar ou cancelar?",
+                  a: "Sim. Você pode definir regras e permitir que ele remarque/cancele dentro de um prazo.",
+                },
+                {
+                  q: "Dá para ter mais de um barbeiro?",
+                  a: "Sim. Cada barbeiro pode ter horários diferentes, pausas e serviços próprios (ou compartilhados).",
+                },
+                {
+                  q: "Posso usar no celular?",
+                  a: "Sim. A interface é responsiva e funciona bem no celular para clientes e barbeiros.",
+                },
+                {
+                  q: "O sistema mostra relatórios?",
+                  a: "Você pode acompanhar histórico, recorrência e visão da operação. Relatórios mais avançados podem evoluir conforme a versão.",
+                },
+              ].map((item) => (
+                <AccordionItem key={item.q} value={item.q}>
+                  <AccordionTrigger className="text-left">
+                    {item.q}
+                  </AccordionTrigger>
+                  <AccordionContent className="text-sm text-muted-foreground">
+                    {item.a}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </div>
+        </section>
+
+        {/* Final CTA */}
+        <section className="py-14">
+          <div className="rounded-[2rem] border bg-gradient-to-br from-[#ff3131]/10 via-background to-lime-400/10 p-10 shadow-sm">
+            <div className="grid gap-8 lg:grid-cols-2 lg:items-center">
+              <div>
+                <h3 className="text-3xl font-bold tracking-tight">
+                  Pronto para digitalizar sua barbearia?
+                </h3>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Mostre profissionalismo, aumente a taxa de retorno e tenha controle total do seu negócio com uma plataforma feita para barbearias.
+                </p>
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <Button
+                    asChild
+                    size="lg"
+                    className="bg-[#ff3131] text-white hover:bg-[#ff3131]"
+                  >
+                    <Link href="/agenda">
+                      Ver agenda pública
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <Button asChild size="lg" variant="outline">
+                    <Link href="/auth/login">Acessar painel</Link>
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-3xl border bg-card p-6">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {[
+                    { icon: <CalendarCheck className="h-5 w-5 text-[#ff3131]" />, t: "Agenda 24/7", d: "Cliente agenda sozinho." },
+                    { icon: <Clock className="h-5 w-5 text-[#ff3131]" />, t: "Horários reais", d: "Sem conflitos de agenda." },
+                    { icon: <Users className="h-5 w-5 text-[#ff3131]" />, t: "Clientes", d: "Histórico e fidelização." },
+                    { icon: <ShieldCheck className="h-5 w-5 text-[#ff3131]" />, t: "Organização", d: "Gestão mais profissional." },
+                  ].map((x) => (
+                    <div key={x.t} className="rounded-2xl border p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#ff3131]/10">
+                          {x.icon}
+                        </div>
+                        <div className="leading-tight">
+                          <div className="text-sm font-semibold">{x.t}</div>
+                          <div className="text-xs text-muted-foreground">{x.d}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </main>
+
+      <footer className="border-t bg-background">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-10 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-muted-foreground">
+            © {new Date().getFullYear()} Agenda Barber. Todos os direitos reservados.
+          </div>
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            <Link className="text-muted-foreground hover:text-foreground" href="/agenda">
+              Agenda pública
+            </Link>
+            <Link className="text-muted-foreground hover:text-foreground" href="/auth/login">
+              Área administrativa
+            </Link>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }
+
