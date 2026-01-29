@@ -109,6 +109,29 @@ export async function updateBarbershop(formData: FormData) {
   revalidatePath(`/${slug}`)
 }
 
+export async function updateBarbershopActive(formData: FormData) {
+  await requireMasterAdmin()
+  const admin = createAdminClient()
+
+  const id = toString(formData.get("id"))
+  const isActive = formData.has("is_active")
+
+  if (!id) {
+    throw new Error("ID obrigatÃ³rio.")
+  }
+
+  const { error } = await admin
+    .from("barbershop_settings")
+    .update({ is_active: isActive, updated_at: new Date().toISOString() })
+    .eq("id", id)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath("/adminmaster")
+  revalidatePath("/")
+  redirect("/adminmaster?tab=barbearias-cadastradas")
+}
+
 export async function deleteBarbershop(formData: FormData) {
   await requireMasterAdmin()
   const admin = createAdminClient()

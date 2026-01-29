@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { TableCell, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-import { deleteBarbershop, updateBarbershop } from "./actions"
+import { deleteBarbershop, updateBarbershop, updateBarbershopActive } from "./actions"
 
 type BarbershopRowProps = {
   shop: {
@@ -28,36 +28,38 @@ export function BarbershopRow({ shop, memberCount, shopBarbers }: BarbershopRowP
   return (
     <TableRow className="transition hover:bg-muted/40">
       <TableCell>
-        <form
-          id={formId}
-          action={updateBarbershop}
-          className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 sm:flex-nowrap"
-        >
-          <input type="hidden" name="id" value={shop.id} />
-          <Input
-            name="name"
-            defaultValue={shop.name || ""}
-            placeholder="Nome"
-            disabled={!isEditing}
-            className="h-8 w-full sm:w-40"
-          />
-          <Textarea
-            name="description"
-            defaultValue={shop.description || ""}
-            rows={1}
-            disabled={!isEditing}
-            className="h-8 min-h-8 w-full resize-none sm:w-56"
-          />
-          <label className="flex items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
-            <input
-              type="checkbox"
-              name="is_active"
-              defaultChecked={shop.is_active !== false}
-              className="h-4 w-4"
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 sm:flex-nowrap">
+          <form id={formId} action={updateBarbershop} className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+            <input type="hidden" name="id" value={shop.id} />
+            <Input
+              name="name"
+              defaultValue={shop.name || ""}
+              placeholder="Nome"
+              disabled={!isEditing}
+              className="h-8 w-full sm:w-40"
             />
-            Ativa
-          </label>
-        </form>
+            <Textarea
+              name="description"
+              defaultValue={shop.description || ""}
+              rows={1}
+              disabled={!isEditing}
+              className="h-8 min-h-8 w-full resize-none sm:w-56"
+            />
+          </form>
+          <form action={updateBarbershopActive} className="inline-flex">
+            <input type="hidden" name="id" value={shop.id} />
+            <label className="flex items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                name="is_active"
+                defaultChecked={shop.is_active !== false}
+                className="h-4 w-4"
+                onChange={(event) => event.currentTarget.form?.requestSubmit()}
+              />
+              Ativa
+            </label>
+          </form>
+        </div>
       </TableCell>
 
       <TableCell>
