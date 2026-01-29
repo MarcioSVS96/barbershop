@@ -16,6 +16,7 @@ import {
   deleteMemberAndUser,
 } from "./actions"
 import { BarbershopRow } from "./barbershop-row"
+import { CreationMessage } from "./creation-message"
 
 
 
@@ -55,7 +56,13 @@ function messageFromCode(code: string | null) {
     case "invalid_role":
       return { title: "Perfil inválido", description: "Escolha owner ou staff." }
     case "user_created":
-      return { title: "Usuário criado", description: "Conta criada e vinculada com sucesso." }
+      return { title: "Perfil criado", description: "Conta criada e vinculada com sucesso." }
+    case "barbershop_created":
+      return { title: "Barbearia criada", description: "Barbearia cadastrada com sucesso." }
+    case "profile_deleted":
+      return { title: "Perfil excluído", description: "O perfil foi removido com sucesso." }
+    case "slug_exists":
+      return { title: "Slug já cadastrado", description: "Use outro slug ou ajuste o nome da barbearia." }
     default:
       return null
   }
@@ -82,6 +89,10 @@ export default async function AdminMasterPage({
   const allowedTabs = new Set(["visao-geral", "nova-barbearia", "nova-conta", "barbearias-cadastradas", "perfis"])
   const activeTab = allowedTabs.has(tabParam) ? tabParam : "visao-geral"
   const msg = messageFromCode(msgCode)
+  const showOverlayMessage =
+    (msgCode === "barbershop_created" && activeTab === "nova-barbearia") ||
+    (msgCode === "user_created" && activeTab === "nova-conta") ||
+    (msgCode === "profile_deleted" && activeTab === "perfis")
 
   const { data: shops, error: shopsError } = await admin
     .from("barbershop_settings")
@@ -229,9 +240,6 @@ export default async function AdminMasterPage({
           </nav>
 
           <div className="mt-auto space-y-3 rounded-xl border bg-muted/40 p-3 text-xs">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">Logado como {user.email}</Badge>
-            </div>
             <div className="flex flex-col gap-2">
               <Button asChild size="sm" variant="outline" className="w-full">
                 <Link href="/">Ver site público</Link>
@@ -246,6 +254,7 @@ export default async function AdminMasterPage({
         </aside>
 
         <main className="space-y-8">
+          {showOverlayMessage && msg ? <CreationMessage title={msg.title} description={msg.description} /> : null}
           <section className={activeTab === "visao-geral" ? "space-y-4" : "hidden"}>
             <header id="visao-geral" className="rounded-2xl border bg-card/80 p-6 shadow-sm">
               <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
@@ -254,7 +263,6 @@ export default async function AdminMasterPage({
                   <p className="text-sm text-muted-foreground">Controle central das barbearias, equipes e acessos.</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 lg:hidden">
-                  <Badge variant="outline">Logado como {user.email}</Badge>
                   <Button asChild size="sm" variant="outline">
                     <Link href="/">Ver site público</Link>
                   </Button>
@@ -291,7 +299,7 @@ export default async function AdminMasterPage({
             </div>
           </section>
 
-          {msg && (activeTab === "nova-barbearia" || activeTab === "nova-conta") ? (
+          {msg && !showOverlayMessage && (activeTab === "nova-barbearia" || activeTab === "nova-conta") ? (
             <div className="rounded-lg border bg-card px-4 py-3">
               <div className="text-sm font-medium">{msg.title}</div>
               <div className="text-xs text-muted-foreground">{msg.description}</div>
@@ -326,7 +334,7 @@ export default async function AdminMasterPage({
 
                 <div className="space-y-1">
                   <Label htmlFor="description">Descrição</Label>
-                  <Textarea id="description" name="description" rows={3} placeholder="Serviços de alto padrão." className="min-h-[72px]" />
+                  <Textarea id="description" name="description" rows={3} placeholder="Serviços de alto padrão." className="min-h-18" />
                 </div>
 
                 <label className="flex items-center gap-2 text-sm">

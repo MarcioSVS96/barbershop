@@ -58,11 +58,19 @@ export async function createBarbershop(formData: FormData) {
   }
 
   const { error } = await admin.from("barbershop_settings").insert(payload)
-  if (error) throw new Error(error.message)
+  if (error) {
+    const code = String((error as { code?: string }).code || "")
+    const message = String(error.message || "").toLowerCase()
+    if (code === "23505" || message.includes("slug_key") || message.includes("unique")) {
+      redirect("/adminmaster?tab=nova-barbearia&msg=slug_exists")
+    }
+    throw new Error(error.message)
+  }
 
   revalidatePath("/adminmaster")
   revalidatePath("/")
   revalidatePath(`/${slug}`)
+  redirect("/adminmaster?tab=nova-barbearia&msg=barbershop_created")
 }
 
 export async function updateBarbershop(formData: FormData) {
@@ -208,7 +216,7 @@ export async function createBarbershopUser(formData: FormData) {
   }
 
   revalidatePath("/adminmaster")
-  redirect("/adminmaster?msg=user_created")
+  redirect("/adminmaster?tab=nova-conta&msg=user_created")
 }
 
 /* ============================================================
