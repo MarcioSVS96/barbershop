@@ -41,26 +41,29 @@ export default function RootPage() {
             </div>
           </Link>
 
-          <div className="flex items-center gap-2">
-            <Button asChild variant="outline" className="hidden sm:inline-flex">
-              <Link href="/auth/login">Área administrativa</Link>
-            </Button>
-            <Button
-              asChild
-              className="bg-[#ff3131] text-white hover:bg-[#ff3131]"
-            >
-              <Link href="/agenda">
-                Testar agenda
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-          </div>
+          <nav className="hidden items-center gap-4 text-sm font-medium text-muted-foreground sm:flex">
+            <Link className="hover:text-foreground" href="#beneficios">
+              Benefícios
+            </Link>
+            <Link className="hover:text-foreground" href="#solucoes">
+              Soluções
+            </Link>
+            <Link className="hover:text-foreground" href="#depoimentos">
+              Depoimentos
+            </Link>
+            <Link className="hover:text-foreground" href="#faq">
+              Dúvidas
+            </Link>
+            <Link className="hover:text-foreground" href="#cta">
+              Começar
+            </Link>
+          </nav>
         </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-4">
         {/* HERO */}
-        <section className="relative grid items-center gap-10 py-14 lg:grid-cols-2 lg:py-20">
+        <section id="hero" className="relative grid items-center gap-10 py-14 lg:grid-cols-2 lg:py-20">
           {/* blobs */}
           <div className="pointer-events-none absolute -top-10 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-[#ff3131]/10 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-10 right-0 h-64 w-64 rounded-full bg-lime-400/10 blur-3xl" />
@@ -95,7 +98,7 @@ export default function RootPage() {
         </section>
 
         {/* Features strip */}
-        <section className="grid gap-4 py-10 md:grid-cols-3">
+        <section id="beneficios" className="grid gap-4 py-10 md:grid-cols-3">
           {[
             {
               title: "Agendamento online",
@@ -131,7 +134,7 @@ export default function RootPage() {
         </section>
 
         {/* Tabs like "Soluções" */}
-        <section className="py-12">
+        <section id="solucoes" className="py-12">
           <div className="grid gap-8 lg:grid-cols-2 lg:items-center">
             <div className="space-y-3">
               <h2 className="text-3xl font-bold tracking-tight">
@@ -238,7 +241,7 @@ export default function RootPage() {
         </section>
 
         {/* Testimonials */}
-        <section className="py-12">
+        <section id="depoimentos" className="py-12">
           <div className="flex items-end justify-between gap-4">
             <div>
               <h2 className="text-3xl font-bold tracking-tight">Depoimentos</h2>
@@ -279,7 +282,7 @@ export default function RootPage() {
         </section>
 
         {/* FAQ */}
-        <section className="py-12">
+        <section id="faq" className="py-12">
           <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
             <div>
               <h2 className="text-3xl font-bold tracking-tight">Tire todas as suas dúvidas</h2>
@@ -348,7 +351,7 @@ export default function RootPage() {
         </section>
 
         {/* Final CTA */}
-        <section className="py-14">
+        <section id="cta" className="py-14">
           <div className="rounded-[2rem] border bg-gradient-to-br from-[#ff3131]/10 via-background to-lime-400/10 p-10 shadow-sm">
             <div className="grid gap-8 lg:grid-cols-2 lg:items-center">
               <div>
@@ -420,4 +423,3 @@ export default function RootPage() {
     </div>
   )
 }
-
