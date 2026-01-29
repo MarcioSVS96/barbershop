@@ -182,27 +182,9 @@ export default async function AdminMasterPage({
                       : "text-muted-foreground group-hover:text-foreground"
                   }`}
                 />
-                Nova barbearia
+                Cadastro
               </span>
               <span className="text-xs text-muted-foreground">+</span>
-            </Link>
-            <Link
-              className={`group flex items-center justify-between rounded-lg border px-3 py-2 font-medium transition ${
-                activeTab === "nova-conta"
-                  ? "border-primary/30 bg-primary/10 text-primary ring-1 ring-primary/20"
-                  : "hover:bg-muted/40"
-              }`}
-              href="/adminmaster?tab=nova-conta"
-            >
-              <span className="flex items-center gap-2">
-                <UserPlus
-                  className={`h-4 w-4 ${
-                    activeTab === "nova-conta" ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
-                  }`}
-                />
-                Criar conta
-              </span>
-              <span className="text-xs text-muted-foreground">User</span>
             </Link>
             <Link
               className={`group flex items-center justify-between rounded-lg border px-3 py-2 font-medium transition ${
@@ -309,7 +291,7 @@ export default async function AdminMasterPage({
             </div>
           </section>
 
-          {msg && activeTab === "nova-conta" ? (
+          {msg && (activeTab === "nova-barbearia" || activeTab === "nova-conta") ? (
             <div className="rounded-lg border bg-card px-4 py-3">
               <div className="text-sm font-medium">{msg.title}</div>
               <div className="text-xs text-muted-foreground">{msg.description}</div>
@@ -317,14 +299,11 @@ export default async function AdminMasterPage({
           ) : null}
 
           <div
-            className={`grid gap-6 lg:grid-cols-[1.2fr_1fr] ${
+            className={`grid gap-4 lg:grid-cols-[1fr_1fr] ${
               activeTab === "nova-barbearia" || activeTab === "nova-conta" ? "" : "hidden"
             }`}
           >
-            <Card
-              id="nova-barbearia"
-              className={`border-muted/60 ${activeTab === "nova-barbearia" ? "" : "hidden"}`}
-            >
+            <Card id="nova-barbearia" className="border-muted/60">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Store className="h-5 w-5 text-muted-foreground" />
@@ -333,21 +312,21 @@ export default async function AdminMasterPage({
               <CardDescription>Cadastre uma barbearia com slug e descrição.</CardDescription>
             </CardHeader>
             <CardContent>
-              <form action={createBarbershop} className="space-y-4">
-                <div className="space-y-2">
+              <form action={createBarbershop} className="space-y-3">
+                <div className="space-y-1">
                   <Label htmlFor="name">Nome</Label>
-                  <Input id="name" name="name" placeholder="Barbearia Premium" required />
+                  <Input id="name" name="name" placeholder="Barbearia Premium" required className="h-9 w-full sm:max-w-sm" />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="slug">Slug</Label>
-                  <Input id="slug" name="slug" placeholder="barbearia-premium" />
+                  <Input id="slug" name="slug" placeholder="barbearia-premium" className="h-9 w-full sm:max-w-sm" />
                   <p className="text-xs text-muted-foreground">Se vazio, o slug será gerado automaticamente.</p>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="description">Descrição</Label>
-                  <Textarea id="description" name="description" rows={3} placeholder="Serviços de alto padrão." />
+                  <Textarea id="description" name="description" rows={3} placeholder="Serviços de alto padrão." className="min-h-[72px]" />
                 </div>
 
                 <label className="flex items-center gap-2 text-sm">
@@ -360,7 +339,7 @@ export default async function AdminMasterPage({
             </CardContent>
           </Card>
 
-            <Card id="nova-conta" className={`border-muted/60 ${activeTab === "nova-conta" ? "" : "hidden"}`}>
+            <Card id="nova-conta" className="border-muted/60">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <UserPlus className="h-5 w-5 text-muted-foreground" />
@@ -371,18 +350,18 @@ export default async function AdminMasterPage({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form action={createBarbershopUser} className="space-y-4">
-                <div className="space-y-2">
+              <form action={createBarbershopUser} className="space-y-3">
+                <div className="space-y-1">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" name="email" type="email" placeholder="admin@barbearia.com" required />
+                  <Input id="email" name="email" type="email" placeholder="admin@barbearia.com" required className="h-9" />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="password">Senha</Label>
-                  <Input id="password" name="password" type="password" placeholder="Crie uma senha forte" required />
+                  <Input id="password" name="password" type="password" placeholder="Crie uma senha forte" required className="h-9" />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="barbershop_id">Barbearia</Label>
                   <select
                     id="barbershop_id"
@@ -402,7 +381,7 @@ export default async function AdminMasterPage({
                   </select>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="role">Perfil</Label>
                   <select
                     id="role"
