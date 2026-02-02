@@ -233,7 +233,7 @@ export default function RootPage() {
           </div>
         </section>
 
-        {/* Testimonials */}
+        {/* Testimonials 
         <section id="depoimentos" className="min-h-screen py-12">
           <div className="flex items-end justify-between gap-4">
             <div>
@@ -272,7 +272,7 @@ export default function RootPage() {
               </div>
             ))}
           </div>
-        </section>
+        </section> */}
 
         {/* FAQ */}
         <section id="faq" className="min-h-screen py-12">
