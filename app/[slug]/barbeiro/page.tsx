@@ -200,7 +200,7 @@ export default async function DashboardPage({
             <div>
               <h1 className="text-xl font-bold">Painel do Barbeiro</h1>
               <p className="text-sm text-muted-foreground">
-                {settings?.name ?? "Barbearia"} • {user.email} • {role}
+                {settings?.name ?? "Barbearia"}
               </p>
             </div>
 
