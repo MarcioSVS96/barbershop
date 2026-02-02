@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 
 import { createClient } from "@/lib/supabase/client"
 
-import { TrendingUp, DollarSign, Calendar as CalendarIcon } from "lucide-react"
+import { TrendingUp, DollarSign, Calendar as CalendarIcon, CreditCard, Banknote } from "lucide-react"
 
 import { isSameWeek, isSameMonth, format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -41,6 +41,12 @@ const statusLabels: Record<string, string> = {
   confirmed: "Confirmado",
   completed: "Concluído",
   cancelled: "Cancelado",
+}
+
+const paymentLabels: Record<string, string> = {
+  pix: "Pix",
+  card: "Cartão",
+  cash: "Dinheiro",
 }
 
 export function BarbershopManagement({
@@ -125,6 +131,17 @@ export function BarbershopManagement({
         .filter((p) => p.appointments?.appointment_date === selectedDateStr)
         .reduce((acc, curr) => acc + Number(curr.amount), 0)
     : 0
+
+  const paymentMethodByAppointmentId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const p of selectedBarberPayments) {
+      const appointmentId = p?.appointments?.id || p?.appointment_id
+      if (!appointmentId) continue
+      if (!p?.payment_method) continue
+      map.set(String(appointmentId), String(p.payment_method))
+    }
+    return map
+  }, [selectedBarberPayments])
 
   // buscar agendamentos do dia selecionado (do barbeiro selecionado)
   useEffect(() => {
@@ -346,9 +363,38 @@ export function BarbershopManagement({
                               <div key={apt.id} className="rounded-lg border bg-background p-3">
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="font-medium">{apt.appointment_time}</div>
-                                  <Badge variant="outline" className={statusColors[apt.status] || ""}>
-                                    {statusLabels[apt.status] || apt.status}
-                                  </Badge>
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className={statusColors[apt.status] || ""}>
+                                      {statusLabels[apt.status] || apt.status}
+                                    </Badge>
+                                    {paymentMethodByAppointmentId.get(String(apt.id)) ? (
+                                      <Badge variant="outline" className="bg-muted/50">
+                                        {(() => {
+                                          const method = paymentMethodByAppointmentId.get(String(apt.id))
+                                          if (method === "card") {
+                                            return (
+                                              <>
+                                                <CreditCard className="h-3.5 w-3.5" />
+                                                <span className="hidden md:inline">Cartão</span>
+                                              </>
+                                            )
+                                          }
+                                          if (method === "cash") {
+                                            return (
+                                              <>
+                                                <Banknote className="h-3.5 w-3.5" />
+                                                <span className="hidden md:inline">Dinheiro</span>
+                                              </>
+                                            )
+                                          }
+                                          if (method === "pix") {
+                                            return <span>Pix</span>
+                                          }
+                                          return paymentLabels[method as string] || method
+                                        })()}
+                                      </Badge>
+                                    ) : null}
+                                  </div>
                                 </div>
 
                                 <div className="mt-1 text-sm">
