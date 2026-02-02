@@ -14,7 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 
 import { useToast } from "@/hooks/use-toast"
 
-import { Calendar as CalendarIcon } from "lucide-react"
+import { Calendar as CalendarIcon, RefreshCcw } from "lucide-react"
 import { addMinutes, format, isSameDay, parse } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
@@ -42,7 +42,6 @@ export function BookingForm({ services, barbers, barbershopId }: BookingFormProp
 
   const [clientName, setClientName] = useState("")
   const [clientPhone, setClientPhone] = useState("")
-  const [clientEmail, setClientEmail] = useState("")
   const [notes, setNotes] = useState("")
 
   const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([])
@@ -266,7 +265,6 @@ export function BookingForm({ services, barbers, barbershopId }: BookingFormProp
             barbershop_id: barbershopId,
             name: clientName,
             phone: clientPhone,
-            email: clientEmail || null,
             notes: null,
           })
           .select()
@@ -304,7 +302,6 @@ export function BookingForm({ services, barbers, barbershopId }: BookingFormProp
       setSelectedTime("")
       setClientName("")
       setClientPhone("")
-      setClientEmail("")
       setNotes("")
       setAvailableTimeSlots([])
     } catch (error) {
@@ -352,17 +349,6 @@ export function BookingForm({ services, barbers, barbershopId }: BookingFormProp
                 required
               />
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="email">Email (opcional)</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="seuemail@exemplo.com"
-              value={clientEmail}
-              onChange={(e) => setClientEmail(e.target.value)}
-            />
           </div>
 
           <div className="space-y-2">
@@ -420,39 +406,46 @@ export function BookingForm({ services, barbers, barbershopId }: BookingFormProp
 
             <div className="space-y-2">
               <Label htmlFor="time">Horário</Label>
-              <Select
-                value={selectedTime}
-                onValueChange={setSelectedTime}
-                required
-                disabled={!selectedService || !selectedBarber || !selectedDate}
-              >
-                <SelectTrigger id="time">
-                  <SelectValue placeholder="Selecione o horário" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableTimeSlots.length > 0 ? (
-                    availableTimeSlots.map((time) => (
-                      <SelectItem key={time} value={time}>
-                        {time}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <div className="px-3 py-2 text-sm text-muted-foreground">Nenhum horário disponível</div>
-                  )}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <Select
+                    value={selectedTime}
+                    onValueChange={setSelectedTime}
+                    required
+                    disabled={!selectedService || !selectedBarber || !selectedDate}
+                  >
+                    <SelectTrigger id="time">
+                      <SelectValue placeholder="Selecione o horário" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableTimeSlots.length > 0 ? (
+                        availableTimeSlots.map((time) => (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">Nenhum horário disponível</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              {/* recalcula quando tiver tudo selecionado */}
-              {selectedService && selectedBarber && selectedDate ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="px-0 text-sm underline text-muted-foreground hover:text-foreground"
-                  onClick={() => calculateAvailableTimeSlots(selectedService, selectedBarber, selectedDate)}
-                >
-                  Atualizar horários
-                </Button>
-              ) : null}
+                {/* recalcula quando tiver tudo selecionado */}
+                {selectedService && selectedBarber && selectedDate ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0"
+                    onClick={() => calculateAvailableTimeSlots(selectedService, selectedBarber, selectedDate)}
+                    aria-label="Atualizar horários"
+                    title="Atualizar horários"
+                  >
+                    <RefreshCcw className="h-4 w-4" />
+                  </Button>
+                ) : null}
+              </div>
             </div>
           </div>
 

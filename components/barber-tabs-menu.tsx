@@ -13,12 +13,21 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
+import { useEffect, useState } from "react"
 
 type BarberTabsMenuProps = {
   slug: string
 }
 
 export function BarberTabsMenu({ slug }: BarberTabsMenuProps) {
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) return null
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

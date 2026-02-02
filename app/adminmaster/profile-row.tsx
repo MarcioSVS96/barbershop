@@ -5,7 +5,7 @@ import { Check, Pencil, Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { TableCell, TableRow } from "@/components/ui/table"
-import { updateBarbershopProfile, prepareDeleteMemberAndUser } from "./actions"
+import { deleteBarbershopProfile, prepareDeleteMemberAndUser } from "./actions"
 
 type ShopRow = {
   id: string
@@ -85,7 +85,7 @@ export function ProfileRow({ member, email, shop, shops, barbers }: ProfileRowPr
       </TableCell>
 
       <TableCell>
-        <form id={formId} action={updateBarbershopProfile} className="flex flex-col gap-2">
+        <form id={formId} action={deleteBarbershopProfile} className="flex flex-col gap-2">
           <input type="hidden" name="user_id" value={member.user_id} />
           <input type="hidden" name="original_barbershop_id" value={member.barbershop_id} />
           <Input
