@@ -403,17 +403,53 @@ export default function RootPage() {
       </main>
 
       <footer className="border-t bg-background">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-10 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Agenda Barber. Todos os direitos reservados.
+        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 md:grid-cols-[1.4fr_1fr] md:items-center">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ff3131] text-white">
+              <Scissors className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-base font-semibold">Agenda Barber</div>
+              <div className="text-sm text-muted-foreground">
+                Sistema de agendamento para barbearias com foco em organização e vendas.
+              </div>
+              <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                <span>© {new Date().getFullYear()} Agenda Barber</span>
+                <span>Todos os direitos reservados.</span>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-4 text-sm">
-            <Link className="text-muted-foreground hover:text-foreground" href="/agenda">
-              Agenda pública
-            </Link>
-            <Link className="text-muted-foreground hover:text-foreground" href="/auth/login">
-              Área administrativa
-            </Link>
+
+          <div className="grid gap-6 sm:grid-cols-2">
+            <div>
+              <div className="text-sm font-semibold">Navegação</div>
+              <nav className="mt-3 flex flex-col gap-2 text-sm">
+                <Link className="text-muted-foreground hover:text-foreground" href="#solucoes">
+                  Soluções
+                </Link>
+                <Link className="text-muted-foreground hover:text-foreground" href="#depoimentos">
+                  Depoimentos
+                </Link>
+                <Link className="text-muted-foreground hover:text-foreground" href="#faq">
+                  Dúvidas
+                </Link>
+                <Link className="text-muted-foreground hover:text-foreground" href="#cta">
+                  Começar
+                </Link>
+              </nav>
+            </div>
+
+            <div>
+              <div className="text-sm font-semibold">Acesso rápido</div>
+              <div className="mt-3 flex flex-col gap-2 text-sm">
+                <Link className="text-muted-foreground hover:text-foreground" href="/agenda">
+                  Agenda pública
+                </Link>
+                <Link className="text-muted-foreground hover:text-foreground" href="/auth/login">
+                  Área administrativa
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </footer>
