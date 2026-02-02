@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 import type { BarbershopSettings, Barber } from "@/lib/types"
-import { Edit, Plus, Trash2, UserRound, Lock } from "lucide-react"
+import { Edit, Plus, Trash2, UserRound, Lock, Upload, ExternalLink, Download, X } from "lucide-react"
 
 type ShopRole = "owner" | "staff"
 
@@ -60,6 +60,10 @@ function publicUrlFromPath(supabase: ReturnType<typeof createClient>, path: stri
   return data.publicUrl
 }
 
+function isStoragePath(path: string) {
+  return !!path && !path.startsWith("http://") && !path.startsWith("https://")
+}
+
 export function ProfileManagement({
   barbershopId,
   settings,
@@ -89,6 +93,7 @@ export function ProfileManagement({
   const [description, setDescription] = useState(settings?.description || "")
   const [logoPath, setLogoPath] = useState(settings?.logo_url || "")
   const [heroPath, setHeroPath] = useState(settings?.hero_background_url || "")
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
   useEffect(() => {
     setName(settings?.name || "")
@@ -125,6 +130,33 @@ export function ProfileManagement({
 
     if (error) throw error
     return path
+  }
+
+  async function removeImage(path: string, type: "logo" | "hero") {
+    if (!canManageShopProfile) {
+      toast({ title: "Sem permissão", description: "Apenas o dono pode remover imagens.", variant: "destructive" })
+      return
+    }
+    if (!path) return
+
+    try {
+      if (isStoragePath(path)) {
+        const { error } = await supabase.storage.from(BUCKET).remove([path])
+        if (error) throw error
+      }
+
+      if (type === "logo") {
+        setLogoPath("")
+        setLogoBust(Date.now())
+      } else {
+        setHeroPath("")
+        setHeroBust(Date.now())
+      }
+
+      toast({ title: "Imagem removida", description: "Clique em salvar para aplicar." })
+    } catch (err: any) {
+      toast({ title: "Erro", description: err?.message || "Falha ao remover imagem.", variant: "destructive" })
+    }
   }
 
   async function handleUploadLogo(e: React.ChangeEvent<HTMLInputElement>) {
@@ -372,6 +404,28 @@ export function ProfileManagement({
 
   return (
     <div className="space-y-6">
+      <Dialog open={!!previewUrl} onOpenChange={(open) => (!open ? setPreviewUrl(null) : null)}>
+        <DialogContent showCloseButton={false} className="max-w-4xl border-0 bg-black/70 p-2 shadow-2xl backdrop-blur">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Pré-visualização da imagem</DialogTitle>
+          </DialogHeader>
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-2 top-2 z-10 text-white hover:bg-white/10"
+              onClick={() => setPreviewUrl(null)}
+              aria-label="Fechar imagem"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+            {previewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={previewUrl} alt="Preview da imagem" className="max-h-[80vh] w-full rounded-lg object-contain" />
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
       {/* ✅ GERENCIAR BARBEIROS */}
       <Card className="border-muted/60 shadow-sm">
         <CardHeader className="space-y-3">
@@ -536,16 +590,28 @@ export function ProfileManagement({
 
           {/* LOGO */}
           <div className="space-y-3">
-            <div className="flex items-end justify-between gap-3">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div className="space-y-1">
                 <Label>Logo</Label>
                 <p className="text-xs text-muted-foreground">Preview do logo usado no site e no dashboard.</p>
               </div>
 
-              <div className="flex gap-2">
-                <Button asChild variant="outline" disabled={isUploadingLogo || !canManageShopProfile}>
-                  <label className="cursor-pointer">
-                    {isUploadingLogo ? "Enviando..." : "Enviar logo"}
+              <div className="flex w-full flex-nowrap gap-2 sm:w-auto">
+                <Button
+                  asChild
+                  variant="outline"
+                  disabled={isUploadingLogo || !canManageShopProfile}
+                  className="w-12 border-primary/30 bg-background/60 shadow-[0_0_0_1px_rgba(99,102,241,0.15)] hover:bg-primary/5"
+                >
+                  <label className="cursor-pointer" aria-label="Enviar logo" title="Enviar logo">
+                    {isUploadingLogo ? (
+                      "Enviando..."
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4" />
+                        <span className="sr-only">Enviar logo</span>
+                      </>
+                    )}
                     <input type="file" className="hidden" accept="image/*" onChange={handleUploadLogo} />
                   </label>
                 </Button>
@@ -553,18 +619,42 @@ export function ProfileManagement({
                 <Button
                   variant="outline"
                   disabled={!logoPublicUrl}
-                  onClick={() => window.open(logoPublicUrl, "_blank", "noopener,noreferrer")}
+                  onClick={() => setPreviewUrl(logoPublicUrl)}
+                  className="w-12 border-primary/20 bg-background/60 hover:bg-primary/5"
+                  aria-label="Abrir logo"
+                  title="Abrir logo"
                 >
-                  Abrir
+                  <ExternalLink className="h-4 w-4" />
+                  <span className="sr-only">Abrir logo</span>
                 </Button>
 
-                <Button variant="outline" disabled={!logoPublicUrl} onClick={() => downloadFile(logoPublicUrl, "logo")}>
-                  Baixar
+                <Button
+                  variant="outline"
+                  disabled={!logoPublicUrl}
+                  onClick={() => downloadFile(logoPublicUrl, "logo")}
+                  className="w-12 border-primary/20 bg-background/60 hover:bg-primary/5"
+                  aria-label="Baixar logo"
+                  title="Baixar logo"
+                >
+                  <Download className="h-4 w-4" />
+                  <span className="sr-only">Baixar logo</span>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  disabled={!logoPath || !canManageShopProfile}
+                  onClick={() => removeImage(logoPath, "logo")}
+                  className="w-12 border-destructive/30 bg-background/60 text-destructive hover:bg-destructive/10"
+                  aria-label="Remover logo"
+                  title="Remover logo"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span className="sr-only">Remover logo</span>
                 </Button>
               </div>
             </div>
 
-            <div className="rounded-xl border bg-muted/10 p-4">
+            <div className="rounded-xl border bg-muted/10 p-4 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.15)]">
               {logoPublicUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={logoPreviewSrc} alt="Preview da logo" className="h-24 w-24 rounded-lg border bg-background object-cover" />
@@ -578,16 +668,28 @@ export function ProfileManagement({
 
           {/* BACKGROUND */}
           <div className="space-y-3">
-            <div className="flex items-end justify-between gap-3">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div className="space-y-1">
                 <Label>Background do topo (site público)</Label>
                 <p className="text-xs text-muted-foreground">Imagem do fundo do topo da página de agendamento.</p>
               </div>
 
-              <div className="flex gap-2">
-                <Button asChild variant="outline" disabled={isUploadingHero || !canManageShopProfile}>
-                  <label className="cursor-pointer">
-                    {isUploadingHero ? "Enviando..." : "Enviar background"}
+              <div className="flex w-full flex-nowrap gap-2 sm:w-auto">
+                <Button
+                  asChild
+                  variant="outline"
+                  disabled={isUploadingHero || !canManageShopProfile}
+                  className="w-12 border-primary/30 bg-background/60 shadow-[0_0_0_1px_rgba(99,102,241,0.15)] hover:bg-primary/5"
+                >
+                  <label className="cursor-pointer" aria-label="Enviar background" title="Enviar background">
+                    {isUploadingHero ? (
+                      "Enviando..."
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4" />
+                        <span className="sr-only">Enviar background</span>
+                      </>
+                    )}
                     <input type="file" className="hidden" accept="image/*" onChange={handleUploadHero} />
                   </label>
                 </Button>
@@ -595,22 +697,42 @@ export function ProfileManagement({
                 <Button
                   variant="outline"
                   disabled={!heroPublicUrl}
-                  onClick={() => window.open(heroPublicUrl, "_blank", "noopener,noreferrer")}
+                  onClick={() => setPreviewUrl(heroPublicUrl)}
+                  className="w-12 border-primary/20 bg-background/60 hover:bg-primary/5"
+                  aria-label="Abrir background"
+                  title="Abrir background"
                 >
-                  Abrir
+                  <ExternalLink className="h-4 w-4" />
+                  <span className="sr-only">Abrir background</span>
                 </Button>
 
                 <Button
                   variant="outline"
                   disabled={!heroPublicUrl}
                   onClick={() => downloadFile(heroPublicUrl, "background")}
+                  className="w-12 border-primary/20 bg-background/60 hover:bg-primary/5"
+                  aria-label="Baixar background"
+                  title="Baixar background"
                 >
-                  Baixar
+                  <Download className="h-4 w-4" />
+                  <span className="sr-only">Baixar background</span>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  disabled={!heroPath || !canManageShopProfile}
+                  onClick={() => removeImage(heroPath, "hero")}
+                  className="w-12 border-destructive/30 bg-background/60 text-destructive hover:bg-destructive/10"
+                  aria-label="Remover background"
+                  title="Remover background"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span className="sr-only">Remover background</span>
                 </Button>
               </div>
             </div>
 
-            <div className="rounded-xl border bg-muted/10 p-4">
+            <div className="rounded-xl border bg-muted/10 p-4 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.15)]">
               {heroPublicUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={heroPreviewSrc} alt="Preview do background" className="h-40 w-full rounded-lg border bg-background object-cover" />

@@ -3,13 +3,23 @@ import { createClient } from "@/lib/supabase/server"
 import { DashboardStats } from "@/components/dashboard-stats"
 import { AppointmentsList } from "@/components/appointments-list"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { LogOut, Scissors, LayoutDashboard, CalendarDays, Briefcase, Clock, DollarSign, Settings } from "lucide-react"
+import {
+  LogOut,
+  Scissors,
+  LayoutDashboard,
+  CalendarDays,
+  Briefcase,
+  Clock,
+  DollarSign,
+  Settings,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { ServiceManagement } from "@/components/service-management"
 import { AvailabilityManagement } from "@/components/availability-management"
 import { BarbershopManagement } from "@/components/barbershop-management"
 import { ProfileManagement } from "@/components/profile-management"
+import { BarberTabsMenu } from "../../../components/barber-tabs-menu"
 import type { BarbershopSettings } from "@/lib/types"
 
 export const dynamic = "force-dynamic"
@@ -174,7 +184,7 @@ export default async function DashboardPage({
       .reduce((sum, payment) => sum + Number(payment.amount), 0) || 0
 
   return (
-    <div className="min-h-screen bg-background">
+    <Tabs defaultValue="overview" className="min-h-screen bg-background gap-0">
       <header className="border-b bg-card">
         <div className="container mx-auto flex flex-col md:flex-row items-start md:items-center justify-between px-4 py-4">
           <div className="flex w-full items-center gap-3">
@@ -194,20 +204,24 @@ export default async function DashboardPage({
               </p>
             </div>
 
-            <form action="/auth/logout" method="post" className="ml-auto">
-              <Button
-                variant="ghost"
-                size="icon"
-                type="submit"
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                aria-label="Sair"
-              >
-                <LogOut className="h-5 w-5" />
-              </Button>
-            </form>
+            <div className="ml-auto flex items-center gap-2">
+              <BarberTabsMenu slug={slug} />
+
+              <form action="/auth/logout" method="post" className="hidden md:block">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  type="submit"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  aria-label="Sair"
+                >
+                  <LogOut className="h-5 w-5" />
+                </Button>
+              </form>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 mt-3 md:mt-0">
+          <div className="hidden md:flex items-center gap-2 mt-3 md:mt-0">
             <Button variant="outline" asChild>
               <Link href={`/${slug}`}>Ver site público</Link>
             </Button>
@@ -216,8 +230,8 @@ export default async function DashboardPage({
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        <Tabs defaultValue="overview" className="mt-2">
-          <TabsList className="flex w-full items-center justify-between gap-1 md:grid md:grid-cols-6 md:gap-2">
+        <div className="mt-2">
+          <TabsList className="hidden w-full items-center justify-between gap-1 md:grid md:grid-cols-6 md:gap-2">
             <TabsTrigger value="overview" className="group flex items-center gap-2 px-3 md:px-4">
               <LayoutDashboard className="h-4 w-4" />
               <span className="hidden md:inline group-data-[state=active]:inline">Visão geral</span>
@@ -248,50 +262,50 @@ export default async function DashboardPage({
               <span className="hidden md:inline group-data-[state=active]:inline">Perfil</span>
             </TabsTrigger>
           </TabsList>
+        </div>
 
-          <TabsContent value="overview" className="mt-6">
-            <DashboardStats
-              todayAppointments={todayAppointments.length}
-              pendingAppointments={pendingAppointments.length}
-              todayRevenue={todayRevenue}
-              monthlyRevenue={monthlyRevenue}
-            />
-          </TabsContent>
+        <TabsContent value="overview" className="mt-6">
+          <DashboardStats
+            todayAppointments={todayAppointments.length}
+            pendingAppointments={pendingAppointments.length}
+            todayRevenue={todayRevenue}
+            monthlyRevenue={monthlyRevenue}
+          />
+        </TabsContent>
 
-          <TabsContent value="appointments" className="mt-6">
-            <AppointmentsList barbershopId={barbershopId} appointments={appointments || []} />
-          </TabsContent>
+        <TabsContent value="appointments" className="mt-6">
+          <AppointmentsList barbershopId={barbershopId} appointments={appointments || []} />
+        </TabsContent>
 
-          <TabsContent value="services" className="mt-6">
-            <ServiceManagement services={services || []} barbershopId={barbershopId} role={role} />
-          </TabsContent>
+        <TabsContent value="services" className="mt-6">
+          <ServiceManagement services={services || []} barbershopId={barbershopId} role={role} />
+        </TabsContent>
 
-          <TabsContent value="availability" className="mt-6">
-            <AvailabilityManagement availability={availability || []} barbershopId={barbershopId} role={role} />
-          </TabsContent>
+        <TabsContent value="availability" className="mt-6">
+          <AvailabilityManagement availability={availability || []} barbershopId={barbershopId} role={role} />
+        </TabsContent>
 
-          <TabsContent value="financial" className="mt-6">
-            <BarbershopManagement
-              barbers={barbers || []}
-              payments={payments || []}
-              today={today}
-              barbershopId={barbershopId}
-              role={role}
-              myBarberId={myBarberId}
-            />
-          </TabsContent>
+        <TabsContent value="financial" className="mt-6">
+          <BarbershopManagement
+            barbers={barbers || []}
+            payments={payments || []}
+            today={today}
+            barbershopId={barbershopId}
+            role={role}
+            myBarberId={myBarberId}
+          />
+        </TabsContent>
 
-          <TabsContent value="profile" className="mt-6">
-            <ProfileManagement
-              settings={settings}
-              barbers={barbers || []}
-              barbershopId={barbershopId}
-              role={role}
-              myBarberId={myBarberId}
-            />
-          </TabsContent>
-        </Tabs>
+        <TabsContent value="profile" className="mt-6">
+          <ProfileManagement
+            settings={settings}
+            barbers={barbers || []}
+            barbershopId={barbershopId}
+            role={role}
+            myBarberId={myBarberId}
+          />
+        </TabsContent>
       </main>
-    </div>
+    </Tabs>
   )
 }
