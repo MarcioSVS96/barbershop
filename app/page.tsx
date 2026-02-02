@@ -29,7 +29,7 @@ export default function RootPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Top bar */}
-      <header className="absolute top-0 left-0 right-0 z-50 border-b bg-background/80 backdrop-blur">
+      <header className="fixed top-0 left-0 right-0 z-50 border-b bg-background/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
           <Link href="/" className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ff3131] text-white">
@@ -42,9 +42,6 @@ export default function RootPage() {
           </Link>
 
           <nav className="hidden items-center gap-4 text-sm font-medium text-muted-foreground sm:flex">
-            <Link className="hover:text-foreground" href="#beneficios">
-              Benefícios
-            </Link>
             <Link className="hover:text-foreground" href="#solucoes">
               Soluções
             </Link>
@@ -98,15 +95,15 @@ export default function RootPage() {
         </section>
 
         {/* Tabs like "Soluções" */}
-        <section id="solucoes" className="py-12">
-          <div className="grid gap-8 lg:grid-cols-2 lg:items-center">
+        <section id="solucoes" className="min-h-screen py-12">
+          <div className="grid gap-8 lg:grid-cols-2">
             <div className="space-y-3">
               <h2 className="text-3xl font-bold tracking-tight">
                 Dê adeus à comanda de papel na sua barbearia
               </h2>
               <p className="text-sm leading-relaxed text-muted-foreground">
                 Divida o foco: o cliente agenda, o barbeiro atende e você acompanha o negócio.
-                Tudo fica registrado, organizado e fácil de acessar.
+                Tudo fica registrado, organizado e fácil de acessar. Lorem ipsum dolor sit amet, consectetur adipisicing elit. Dolore, molestiae esse obcaecati ipsa itaque eaque, debitis nemo alias est quas placeat libero, aliquid facere enim aspernatur velit excepturi sit repellat.
               </p>
             </div>
 
@@ -117,7 +114,7 @@ export default function RootPage() {
                 <TabsTrigger value="gestao">Gestão</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="agenda" className="mt-4 min-h-70 md:min-h-80">
+              <TabsContent value="agenda" className="mt-4 min-h-80 md:min-h-60">
                 <div className="rounded-3xl border bg-card p-6 shadow-sm">
                   <div className="flex items-start gap-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ff3131]/10">
@@ -145,7 +142,7 @@ export default function RootPage() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="clientes" className="mt-4 min-h-70 md:min-h-80">
+              <TabsContent value="clientes" className="mt-4 min-h-80 md:min-h-60">
                 <div className="rounded-3xl border bg-card p-6 shadow-sm">
                   <div className="flex items-start gap-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ff3131]/10">
@@ -173,7 +170,7 @@ export default function RootPage() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="gestao" className="mt-4 min-h-70 md:min-h-80">
+              <TabsContent value="gestao" className="mt-4 min-h-80 md:min-h-60">
                 <div className="rounded-3xl border bg-card p-6 shadow-sm">
                   <div className="flex items-start gap-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ff3131]/10">
@@ -202,46 +199,42 @@ export default function RootPage() {
               </TabsContent>
             </Tabs>
           </div>
-        </section>
-        
-        {/* Features strip */}
-        <section id="beneficios" className="grid gap-4 py-10 md:grid-cols-3">
-          {[
-            {
-              title: "Agendamento online",
-              desc: "Cliente marca sozinho. Você só confirma e atende.",
-              icon: <Smartphone className="h-5 w-5 text-[#ff3131]" />,
-            },
-            {
-              title: "Menos faltas",
-              desc: "Organização + clareza de horários reduz furo.",
-              icon: <ShieldCheck className="h-5 w-5 text-[#ff3131]" />,
-            },
-            {
-              title: "Gestão e relatórios",
-              desc: "Saiba o que vende mais e tome decisões rápidas.",
-              icon: <LineChart className="h-5 w-5 text-[#ff3131]" />,
-            },
-          ].map((f) => (
-            <div
-              key={f.title}
-              className="rounded-3xl border bg-card p-6 shadow-sm"
-            >
-              <div className="flex items-start gap-4">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#ff3131]/10">
-                  {f.icon}
-                </div>
-                <div>
-                  <div className="text-base font-semibold">{f.title}</div>
-                  <div className="mt-1 text-sm text-muted-foreground">{f.desc}</div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {[
+              {
+                title: "Agendamento online",
+                desc: "Cliente marca sozinho. Você só confirma e atende.",
+                icon: <Smartphone className="h-5 w-5 text-[#ff3131]" />,
+              },
+              {
+                title: "Menos faltas",
+                desc: "Organização + clareza de horários reduz furo.",
+                icon: <ShieldCheck className="h-5 w-5 text-[#ff3131]" />,
+              },
+              {
+                title: "Gestão e relatórios",
+                desc: "Saiba o que vende mais e tome decisões rápidas.",
+                icon: <LineChart className="h-5 w-5 text-[#ff3131]" />,
+              },
+            ].map((f) => (
+              <div key={f.title} className="rounded-3xl border bg-card p-6 shadow-sm">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#ff3131]/10">
+                    {f.icon}
+                  </div>
+                  <div>
+                    <div className="text-base font-semibold">{f.title}</div>
+                    <div className="mt-1 text-sm text-muted-foreground">{f.desc}</div>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </section>
 
         {/* Testimonials */}
-        <section id="depoimentos" className="py-12">
+        <section id="depoimentos" className="min-h-screen py-12">
           <div className="flex items-end justify-between gap-4">
             <div>
               <h2 className="text-3xl font-bold tracking-tight">Depoimentos</h2>
@@ -282,7 +275,7 @@ export default function RootPage() {
         </section>
 
         {/* FAQ */}
-        <section id="faq" className="py-12">
+        <section id="faq" className="min-h-screen py-12">
           <div className="grid place-items-center gap-8 lg:grid-cols-2 lg:items-center lg:justify-items-center">
             <div>
               <h2 className="text-3xl font-bold tracking-tight">Tire todas as suas dúvidas</h2>
@@ -355,7 +348,7 @@ export default function RootPage() {
         </section>
 
         {/* Final CTA */}
-        <section id="cta" className="py-14">
+        <section id="cta" className="min-h-screen py-14">
           <div className="rounded-4xl border bg-linear-to-br from-[#ff3131]/10 via-background to-lime-400/10 p-10 shadow-sm">
             <div className="grid gap-8 lg:grid-cols-2 lg:items-center">
               <div>
