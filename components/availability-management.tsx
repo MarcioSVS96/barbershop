@@ -160,18 +160,18 @@ export function AvailabilityManagement({
   }
 
   return (
-    <Card className="border-muted/60 shadow-sm">
-      <CardHeader className="space-y-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <Card className="border-muted/60 shadow-sm overflow-hidden">
+      <CardHeader className="space-y-4 bg-gradient-to-b from-muted/10 to-transparent">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/40">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl border bg-card shadow-sm">
                 <CalendarDays className="h-4 w-4 text-muted-foreground" />
               </div>
               <CardTitle className="text-lg sm:text-xl flex items-center gap-2">
                 Horários de Atendimento
                 {isReadOnly ? (
-                  <span className="inline-flex items-center gap-1 rounded-md border bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 rounded-full border bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
                     <Lock className="h-3 w-3" />
                     Somente leitura
                   </span>
@@ -182,7 +182,7 @@ export function AvailabilityManagement({
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+            <div className="hidden sm:flex items-center gap-2 rounded-full border bg-card/70 px-3 py-2 text-sm shadow-sm">
               <span className="text-muted-foreground">Dias ativos</span>
               <span className="font-medium">{activeDaysCount}/7</span>
             </div>
@@ -196,20 +196,22 @@ export function AvailabilityManagement({
           </div>
         </div>
 
-        <div className="sm:hidden flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2 text-xs">
+        <div className="sm:hidden flex items-center justify-between rounded-full border bg-card/70 px-3 py-2 text-xs shadow-sm">
           <span className="text-muted-foreground">Dias ativos</span>
           <span className="font-medium">{activeDaysCount}/7</span>
         </div>
       </CardHeader>
 
-      <CardContent>
-        <div className="space-y-3">
+      <CardContent className="pt-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           {items.map((item) => (
             <div
               key={item.day_of_week}
               className={[
-                "rounded-xl border p-4 transition-colors",
-                item.is_active ? "bg-card" : "bg-muted/20 opacity-90",
+                "group rounded-2xl border p-4 shadow-sm transition-all",
+                item.is_active
+                  ? "bg-gradient-to-br from-card to-muted/20 hover:shadow-md"
+                  : "bg-muted/10 opacity-80 hover:opacity-100",
               ].join(" ")}
             >
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -221,14 +223,14 @@ export function AvailabilityManagement({
                       disabled={isReadOnly}
                     />
                     <div className="leading-tight">
-                      <Label className={item.is_active ? "font-medium" : "text-muted-foreground"}>{item.label}</Label>
+                      <Label className={item.is_active ? "font-semibold" : "text-muted-foreground"}>{item.label}</Label>
                       <p className="text-xs text-muted-foreground">{item.is_active ? "Aberto para agendamentos" : "Fechado"}</p>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
                     <Clock className="h-4 w-4" />
                     <span>Atendimento</span>
                   </div>
@@ -239,7 +241,7 @@ export function AvailabilityManagement({
                       value={item.start_time}
                       onChange={(e) => handleUpdate(item.day_of_week, "start_time", e.target.value)}
                       disabled={!item.is_active || isReadOnly}
-                      className="w-27.5"
+                      className="h-9 w-27.5 bg-background/80"
                     />
                     <span className="text-xs text-muted-foreground">até</span>
                     <Input
@@ -247,14 +249,14 @@ export function AvailabilityManagement({
                       value={item.end_time}
                       onChange={(e) => handleUpdate(item.day_of_week, "end_time", e.target.value)}
                       disabled={!item.is_active || isReadOnly}
-                      className="w-27.5"
+                      className="h-9 w-27.5 bg-background/80"
                     />
                   </div>
                 </div>
               </div>
 
               {item.is_active && (
-                <div className="mt-4 border-t pt-4">
+                <div className="mt-4 border-t/70 pt-4">
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm font-medium">Intervalos (pausas)</Label>
@@ -272,13 +274,13 @@ export function AvailabilityManagement({
                     ) : (
                       <div className="space-y-2">
                         {item.breaks?.map((brk, idx: number) => (
-                          <div key={idx} className="flex items-center justify-between gap-3 rounded-lg border bg-muted/10 p-3">
+                          <div key={idx} className="flex items-center justify-between gap-3 rounded-xl border bg-background/70 p-3">
                             <div className="flex min-w-0 items-center gap-2">
                               <Input
                                 type="time"
                                 value={String(brk.start).slice(0, 5)}
                                 onChange={(e) => updateBreak(item.day_of_week, idx, "start", e.target.value)}
-                                className="h-9 w-27.5"
+                                className="h-9 w-27.5 bg-background/80"
                                 disabled={isReadOnly}
                               />
                               <span className="text-xs text-muted-foreground">até</span>
@@ -286,7 +288,7 @@ export function AvailabilityManagement({
                                 type="time"
                                 value={String(brk.end).slice(0, 5)}
                                 onChange={(e) => updateBreak(item.day_of_week, idx, "end", e.target.value)}
-                                className="h-9 w-27.5"
+                                className="h-9 w-27.5 bg-background/80"
                                 disabled={isReadOnly}
                               />
                             </div>

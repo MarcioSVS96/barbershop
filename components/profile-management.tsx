@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 
 import type { BarbershopSettings, Barber } from "@/lib/types"
 import { Edit, Plus, Trash2, UserRound, Lock, Upload, ExternalLink, Download, X } from "lucide-react"
+import { deleteBarberAndRelated } from "@/app/actions"
 
 type ShopRole = "owner" | "staff"
 
@@ -379,22 +380,27 @@ export function ProfileManagement({
       return
     }
 
-    if (!confirm("Tem certeza que deseja excluir este barbeiro?")) return
+    if (
+      !confirm(
+        "Tem certeza que deseja excluir este barbeiro? Todos os agendamentos e pagamentos vinculados também serão removidos.",
+      )
+    )
+      return
 
     setIsSavingBarber(true)
     try {
-      const { error } = await supabase.from("barbers").delete().eq("id", id).eq("barbershop_id", barbershopId)
-
-      if (error) throw error
+      const result = await deleteBarberAndRelated(barbershopId, id)
+      if (!result.ok) throw new Error(result.error)
 
       setBarbers((prev) => prev.filter((b) => b.id !== id))
       toast({ title: "Barbeiro excluído", description: "O barbeiro foi removido com sucesso." })
       router.refresh()
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting barber:", error)
+      const errorMessage = error?.message || error?.details || error?.hint
       toast({
         title: "Erro",
-        description: "Não foi possível excluir o barbeiro. Verifique se há agendamentos vinculados.",
+        description: errorMessage || "Não foi possível excluir o barbeiro. Verifique se há agendamentos vinculados.",
         variant: "destructive",
       })
     } finally {
