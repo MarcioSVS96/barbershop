@@ -155,6 +155,20 @@ export default async function DashboardPage({
     console.error("[/barbeiro] barbersError:", barbersError)
   }
 
+  const { data: memberRoles, error: memberRolesError } = await supabase
+    .from("barbershop_members")
+    .select("barber_id, role")
+    .eq("barbershop_id", barbershopId)
+
+  if (memberRolesError) {
+    console.error("[/barbeiro] memberRolesError:", memberRolesError)
+  }
+
+  const barberRolesById = (memberRoles || []).reduce<Record<string, string>>((acc, row) => {
+    if (row?.barber_id) acc[String(row.barber_id)] = String(row.role || "")
+    return acc
+  }, {})
+
   const settings: BarbershopSettings | null = (shop as BarbershopSettings) ?? null
   const publicUrlFromPath = (path: string | null) => {
     if (!path) return ""
@@ -301,6 +315,7 @@ export default async function DashboardPage({
             settings={settings}
             barbers={barbers || []}
             barbershopId={barbershopId}
+            barberRolesById={barberRolesById}
             role={role}
             myBarberId={myBarberId}
           />

@@ -65,7 +65,8 @@ export function AvailabilityManagement({
         label: day.label,
         start_time: String(row?.start_time ?? "09:00").slice(0, 5),
         end_time: String(row?.end_time ?? "19:00").slice(0, 5),
-        is_active: row?.is_active ?? day.id !== 0,
+        // default: new shop starts with all days disabled until configured
+        is_active: row?.is_active ?? false,
         breaks: breaksArr as BreakItem[],
       }
     })

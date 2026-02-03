@@ -22,6 +22,7 @@ interface ProfileManagementProps {
   barbershopId: string
   settings: BarbershopSettings | null
   barbers: Barber[]
+  barberRolesById?: Record<string, string>
   role?: ShopRole
   myBarberId?: string | null
 }
@@ -69,6 +70,7 @@ export function ProfileManagement({
   barbershopId,
   settings,
   barbers: initialBarbers,
+  barberRolesById = {},
   role = "owner",
   myBarberId = null,
 }: ProfileManagementProps) {
@@ -505,6 +507,9 @@ export function ProfileManagement({
           <div className="space-y-3">
             {barbers.map((barber) => {
               const canEdit = canEditThisBarber(barber.id)
+              const barberRole = barberRolesById[barber.id]
+              const isOwnerTarget = barberRole === "owner"
+              const canDelete = canManageBarbers && !isOwnerTarget
 
               return (
                 <div
@@ -536,9 +541,15 @@ export function ProfileManagement({
                       variant="ghost"
                       size="icon"
                       onClick={() => handleDeleteBarber(barber.id)}
-                      disabled={isSavingBarber || !canManageBarbers}
+                      disabled={isSavingBarber || !canDelete}
                       className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      title={canManageBarbers ? "Excluir" : "Sem permissão"}
+                      title={
+                        !canManageBarbers
+                          ? "Sem permissão"
+                          : isOwnerTarget
+                            ? "Apenas o admin master pode excluir owner"
+                            : "Excluir"
+                      }
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

@@ -31,6 +31,21 @@ export async function deleteBarberAndRelated(barbershopId: string, barberId: str
     return { ok: false, error: "Sem permissão para excluir barbeiros." }
   }
 
+  const { data: targetMember, error: targetMemberError } = await supabase
+    .from("barbershop_members")
+    .select("role")
+    .eq("barbershop_id", barbershopId)
+    .eq("barber_id", barberId)
+    .maybeSingle()
+
+  if (targetMemberError || !targetMember) {
+    return { ok: false, error: "Barbeiro não encontrado ou sem vínculo." }
+  }
+
+  if (targetMember.role !== "staff") {
+    return { ok: false, error: "Apenas o admin master pode excluir owner." }
+  }
+
   const admin = createAdminClient()
 
   const { error: paymentsError } = await admin
