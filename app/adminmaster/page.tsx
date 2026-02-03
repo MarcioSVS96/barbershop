@@ -74,6 +74,11 @@ function messageFromCode(code: string | null) {
       return { title: "Dados incompletos", description: "Preencha email, barbearia e perfil." }
     case "profile_update_not_found":
       return { title: "Perfil não encontrado", description: "Não foi possível localizar o perfil para atualizar." }
+    case "invalid_whatsapp":
+      return {
+        title: "WhatsApp inválido",
+        description: "Use apenas DDD + 9 dígitos (11 no total). Ex: 81987654321."
+      }
     default:
       return null
   }
@@ -422,6 +427,22 @@ export default async function AdminMasterPage({
                   </select>
                 </div>
 
+                {/* ✅ NOVO: WhatsApp da barbearia (DDD + 9 dígitos) */}
+                <div className="space-y-1">
+                  <Label htmlFor="whatsapp_phone">WhatsApp da barbearia</Label>
+                  <Input
+                    id="whatsapp_phone"
+                    name="whatsapp_phone"
+                    inputMode="numeric"
+                    placeholder="81987654321"
+                    maxLength={11}
+                    className="h-9"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Informe apenas DDD + número (11 dígitos). Ex: 81987654321. O 55 será aplicado automaticamente no link.
+                  </p>
+                </div>
+
                 <div className="space-y-1">
                   <Label htmlFor="role">Perfil</Label>
                   <select
@@ -433,11 +454,14 @@ export default async function AdminMasterPage({
                     <option value="owner">Owner</option>
                     <option value="staff">Staff</option>
                   </select>
-                  <p className="text-xs text-muted-foreground">Owner = dono/admin. Staff = barbeiro (precisa vincular um barbeiro).</p>
+                  <p className="text-xs text-muted-foreground">
+                    Owner = dono/admin. Staff = barbeiro (precisa vincular um barbeiro).
+                  </p>
                 </div>
 
                 <Button type="submit">Criar conta</Button>
               </form>
+
             </CardContent>
           </Card>
         </div>

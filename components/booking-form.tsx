@@ -29,6 +29,14 @@ interface BookingFormProps {
 // ✅ margem de segurança para “agendar em cima da hora”
 const MINUTES_CUTOFF = 5
 
+function normalizeWhatsappBR(input: string | null | undefined) {
+  const digits = String(input || "").replace(/\D/g, "")
+  if (!digits) return null
+  // DDD (2) + 9 + 8 dígitos (total 11) => ex: 81997441023
+  if (!/^[1-9]{2}9[0-9]{8}$/.test(digits)) return null
+  return digits
+}
+
 export function BookingForm({ services, barbers, barbershopId }: BookingFormProps) {
   const supabase = useMemo(() => createClient(), [])
   const { toast } = useToast()
@@ -292,8 +300,55 @@ export function BookingForm({ services, barbers, barbershopId }: BookingFormProp
 
       toast({
         title: "Agendamento realizado com sucesso!",
-        description: "Volte sempre.",
+        description: "Abrindo WhatsApp para confirmação...",
       })
+
+      /* =============================
+         4) REDIRECT PARA WHATSAPP (fallback da barbearia)
+         - Busca barbershop_settings.whatsapp_phone
+         - Monta wa.me/55 + número
+      ============================== */
+
+      const { data: shopRow, error: shopErr } = await supabase
+        .from("barbershop_settings")
+        .select("whatsapp_phone")
+        .eq("id", barbershopId)
+        .maybeSingle()
+
+      if (shopErr) {
+        console.error("[BookingForm] barbershop_settings whatsapp error:", shopErr)
+      }
+
+      const whatsappPhone = normalizeWhatsappBR((shopRow as any)?.whatsapp_phone)
+
+      if (whatsappPhone) {
+        const barberName = barbers.find((b) => b.id === selectedBarber)?.name || "Barbeiro"
+        const serviceName = selectedServiceData?.name || "Serviço"
+        const dateLabel = format(selectedDate, "dd/MM/yyyy", { locale: ptBR })
+
+        const message = [
+          `Olá! Gostaria de confirmar meu agendamento.`,
+          ``,
+          `Cliente: ${clientName}`,
+          `Telefone: ${clientPhone}`,
+          `Serviço: ${serviceName}`,
+          `Barbeiro: ${barberName}`,
+          `Data: ${dateLabel}`,
+          `Horário: ${selectedTime}`,
+          notes ? `Obs: ${notes}` : null,
+        ]
+          .filter(Boolean)
+          .join("\n")
+
+        const url = `https://wa.me/55${whatsappPhone}?text=${encodeURIComponent(message)}`
+        window.open(url, "_blank", "noopener,noreferrer")
+      } else {
+        toast({
+          title: "WhatsApp não configurado",
+          description: "O agendamento foi criado, mas a barbearia não cadastrou um WhatsApp para confirmação.",
+          variant: "destructive",
+        })
+      }
 
       // Reset form
       setSelectedDate(undefined)
