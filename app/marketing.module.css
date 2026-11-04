@@ -220,7 +220,7 @@
   box-shadow: 0 20px 65px -30px #191c2640;
 }
 .heroVisual {
-  transform: rotate(-1deg);
+  transform: none;
 }
 .browserBar {
   background: #f8f8fa;
