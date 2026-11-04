@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { requireMasterAdmin } from "@/lib/admin/master"
+import { deleteAccount, type DeleteAccountState } from "@/lib/admin/accounts"
 
 function toString(value: FormDataEntryValue | null) {
   if (typeof value === "string") return value.trim()
@@ -41,7 +42,6 @@ function normalizeWhatsappBR(input: string) {
   return digits
 }
 
-
 /* ============================================================
    BARBEARIAS
 ============================================================ */
@@ -74,7 +74,11 @@ export async function createBarbershop(formData: FormData) {
   if (error) {
     const code = String((error as { code?: string }).code || "")
     const message = String(error.message || "").toLowerCase()
-    if (code === "23505" || message.includes("slug_key") || message.includes("unique")) {
+    if (
+      code === "23505" ||
+      message.includes("slug_key") ||
+      message.includes("unique")
+    ) {
       redirect("/adminmaster?tab=nova-barbearia&msg=slug_exists")
     }
     throw new Error(error.message)
@@ -100,7 +104,11 @@ export async function updateBarbershop(formData: FormData) {
     throw new Error("Dados obrigatórios ausentes.")
   }
 
-  const { data: currentRow } = await admin.from("barbershop_settings").select("slug").eq("id", id).maybeSingle()
+  const { data: currentRow } = await admin
+    .from("barbershop_settings")
+    .select("slug")
+    .eq("id", id)
+    .maybeSingle()
 
   const oldSlug = currentRow?.slug || null
 
@@ -112,7 +120,10 @@ export async function updateBarbershop(formData: FormData) {
     updated_at: new Date().toISOString(),
   }
 
-  const { error } = await admin.from("barbershop_settings").update(payload).eq("id", id)
+  const { error } = await admin
+    .from("barbershop_settings")
+    .update(payload)
+    .eq("id", id)
 
   if (error) throw new Error(error.message)
 
@@ -152,11 +163,33 @@ export async function deleteBarbershop(formData: FormData) {
   const id = toString(formData.get("id"))
   if (!id) throw new Error("ID obrigatório.")
 
-  const { data: currentRow } = await admin.from("barbershop_settings").select("slug").eq("id", id).maybeSingle()
+  const { data: currentRow } = await admin
+    .from("barbershop_settings")
+    .select("slug")
+    .eq("id", id)
+    .maybeSingle()
 
   const oldSlug = currentRow?.slug || null
 
-  const { error } = await admin.from("barbershop_settings").delete().eq("id", id)
+  // Removing the shop alone would hide its memberships but leave Auth accounts.
+  const { data: linkedAccounts, error: linkedAccountsError } = await admin
+    .from("barbershop_members")
+    .select("user_id")
+    .eq("barbershop_id", id)
+    .limit(1)
+  if (linkedAccountsError)
+    throw new Error(
+      "Não foi possível conferir as contas vinculadas. A barbearia foi mantida.",
+    )
+  if (linkedAccounts?.length)
+    redirect(
+      "/adminmaster?tab=barbearias-cadastradas&msg=barbershop_has_accounts",
+    )
+
+  const { error } = await admin
+    .from("barbershop_settings")
+    .delete()
+    .eq("id", id)
 
   if (error) throw new Error(error.message)
 
@@ -200,15 +233,20 @@ export async function createBarbershopUser(formData: FormData) {
      1) CRIA USUÁRIO (AUTH)
   ============================== */
 
-  const { data: userData, error: userError } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  })
+  const { data: userData, error: userError } =
+    await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    })
 
   if (userError) {
     const msg = String(userError.message || "").toLowerCase()
-    if (msg.includes("already") || msg.includes("exists") || msg.includes("email")) {
+    if (
+      msg.includes("already") ||
+      msg.includes("exists") ||
+      msg.includes("email")
+    ) {
       redirect("/adminmaster?tab=nova-conta&msg=email_exists")
     }
     throw new Error(userError.message)
@@ -269,7 +307,10 @@ export async function createBarbershopUser(formData: FormData) {
   if (typeof whatsappPhone === "string" && whatsappPhone.length === 11) {
     const { error: waErr } = await admin
       .from("barbershop_settings")
-      .update({ whatsapp_phone: whatsappPhone, updated_at: new Date().toISOString() })
+      .update({
+        whatsapp_phone: whatsappPhone,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", barbershopId)
 
     if (waErr) {
@@ -281,7 +322,6 @@ export async function createBarbershopUser(formData: FormData) {
   revalidatePath("/adminmaster")
   redirect("/adminmaster?tab=nova-conta&msg=user_created")
 }
-
 
 /* ============================================================
    EDITAR PERFIL (OWNER / STAFF)
@@ -310,10 +350,17 @@ export async function updateBarbershopUser(formData: FormData) {
   const updatePayload: { email: string; password?: string } = { email }
   if (password) updatePayload.password = password
 
-  const { error: authError } = await admin.auth.admin.updateUserById(userId, updatePayload)
+  const { error: authError } = await admin.auth.admin.updateUserById(
+    userId,
+    updatePayload,
+  )
   if (authError) {
     const msg = String(authError.message || "").toLowerCase()
-    if (msg.includes("already") || msg.includes("exists") || msg.includes("email")) {
+    if (
+      msg.includes("already") ||
+      msg.includes("exists") ||
+      msg.includes("email")
+    ) {
       redirect("/adminmaster?tab=perfis&msg=email_exists")
     }
     throw new Error(authError.message)
@@ -376,103 +423,52 @@ export async function updateBarbershopUser(formData: FormData) {
 }
 
 /* ============================================================
-   EXCLUIR PERFIL (vínculo + deletar usuário do Auth)
-   Regras:
-   - remove barbershop_members do (user_id + barbershop_id)
-   - deleta usuário do Auth
-   - bloqueia deletar master_admin
+   EXCLUIR CONTA: AUTH PRIMEIRO, VÍNCULOS SOMENTE APÓS SUCESSO
 ============================================================ */
-
-export async function deleteBarbershopProfile(formData: FormData) {
-  await requireMasterAdmin()
-  const admin = createAdminClient()
-
-  const userId = toString(formData.get("user_id"))
-  const barbershopId = toString(formData.get("barbershop_id"))
-
-  if (!userId || !barbershopId) {
-    redirect("/adminmaster?tab=perfis&msg=profile_delete_missing_fields")
-  }
-
-  // ✅ segurança: não permitir deletar master admin
-  const { data: masterRow, error: masterErr } = await admin
-    .from("master_admins")
-    .select("user_id")
-    .eq("user_id", userId)
-    .maybeSingle()
-
-  if (masterErr) {
-    console.error("[deleteBarbershopProfile] masterErr:", masterErr)
-    redirect("/adminmaster?tab=perfis&msg=profile_delete_error")
-  }
-
-  if (masterRow?.user_id) {
-    redirect("/adminmaster?tab=perfis&msg=profile_delete_master_blocked")
-  }
-
-  // 1) remover vínculo no banco
-  const { error: memberDelErr } = await admin
-    .from("barbershop_members")
-    .delete()
-    .eq("user_id", userId)
-    .eq("barbershop_id", barbershopId)
-
-  if (memberDelErr) {
-    console.error("[deleteBarbershopProfile] memberDelErr:", memberDelErr)
-    redirect("/adminmaster?tab=perfis&msg=profile_delete_member_error")
-  }
-
-  // 2) deletar usuário do Auth (login some completamente)
-  const { error: authDelErr } = await admin.auth.admin.deleteUser(userId)
-
-  if (authDelErr) {
-    console.error("[deleteBarbershopProfile] authDelErr:", authDelErr)
-    redirect("/adminmaster?tab=perfis&msg=profile_delete_auth_error")
-  }
-
-  revalidatePath("/adminmaster")
-  redirect("/adminmaster?tab=perfis&msg=profile_deleted")
-}
 
 export async function prepareDeleteMemberAndUser(formData: FormData) {
   await requireMasterAdmin()
-
   const userId = toString(formData.get("user_id"))
   const barbershopId = toString(formData.get("barbershop_id"))
-
-  if (!userId || !barbershopId) {
+  const scope =
+    toString(formData.get("scope")) === "unlinked" ? "unlinked" : "linked"
+  if (!userId || (scope === "linked" && !barbershopId))
     redirect("/adminmaster?tab=perfis")
-  }
-
-  redirect(
-    `/adminmaster?tab=perfis&confirm=1&user_id=${encodeURIComponent(userId)}&barbershop_id=${encodeURIComponent(barbershopId)}`,
-  )
+  const query = new URLSearchParams({
+    tab: "perfis",
+    confirm: "1",
+    user_id: userId,
+    scope,
+  })
+  if (scope === "linked") query.set("barbershop_id", barbershopId)
+  redirect(`/adminmaster?${query}`)
 }
 
-export async function deleteMemberAndUser(formData: FormData) {
-  await requireMasterAdmin()
-  const admin = createAdminClient()
-
-  const userId = toString(formData.get("user_id"))
-  const barbershopId = toString(formData.get("barbershop_id"))
-
-  if (!userId || !barbershopId) {
-    throw new Error("user_id e barbershop_id são obrigatórios.")
+export async function deleteMemberAndUser(
+  _previousState: DeleteAccountState,
+  formData: FormData,
+): Promise<DeleteAccountState> {
+  const { user } = await requireMasterAdmin()
+  const scope = toString(formData.get("scope"))
+  if (scope !== "linked" && scope !== "unlinked")
+    return { error: "Selecione a conta novamente antes de excluir." }
+  try {
+    const result = await deleteAccount(createAdminClient(), {
+      actorId: user.id,
+      userId: toString(formData.get("user_id")),
+      barbershopId: toString(formData.get("barbershop_id")) || null,
+      scope,
+      confirmed: formData.get("confirmed") === "1",
+    })
+    if (!result.ok) return { error: result.error }
+  } catch (error) {
+    console.error("[adminmaster] account deletion failed:", error)
+    return {
+      error:
+        "Não foi possível concluir a exclusão. Verifique a configuração de acesso administrativo e tente novamente.",
+    }
   }
-
-  // 1) remove vínculo
-  const { error: memberErr } = await admin
-    .from("barbershop_members")
-    .delete()
-    .eq("user_id", userId)
-    .eq("barbershop_id", barbershopId)
-
-  if (memberErr) throw new Error(memberErr.message)
-
-  // 2) deleta user do Auth (sempre)
-  const { error: authErr } = await admin.auth.admin.deleteUser(userId)
-  if (authErr) throw new Error(authErr.message)
-
   revalidatePath("/adminmaster")
-  redirect("/adminmaster?tab=perfis")
+  revalidatePath("/barbeiro")
+  redirect("/adminmaster?tab=perfis&msg=profile_deleted")
 }
