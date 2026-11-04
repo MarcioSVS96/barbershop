@@ -1,0 +1,374 @@
+.bookingCanvas {
+  line-height: 1.5;
+  padding: 24px;
+  background: #f0f2f7;
+}
+.bookingCard {
+  padding: 24px;
+  background: white;
+  border: 1px solid #e2e5ec;
+  border-radius: 14px;
+  box-shadow: 0 10px 28px #22283b0a;
+}
+.shopHeader,
+.dashboardHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #edf0f3;
+}
+.logo,
+.smallLogo {
+  background: #20283b;
+  color: white;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+.shopHeader strong,
+.dashboardHeader strong {
+  display: block;
+  color: #202536;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.shopHeader div > span,
+.dashboardHeader div > span {
+  display: block;
+  font-size: 10px;
+  color: #6b7280;
+  margin-top: 3px;
+}
+.bookingHeading {
+  margin: 18px 0 16px;
+}
+.bookingHeading strong {
+  display: block;
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  color: #202536;
+}
+.bookingHeading > span {
+  display: block;
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 3px;
+}
+.fieldRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.field {
+  min-width: 0;
+  margin-bottom: 12px;
+}
+.field > span {
+  font-size: 10px;
+  color: #525b6d;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 6px;
+}
+.input {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 39px;
+  border: 1px solid #e4e7ed;
+  border-radius: 7px;
+  background: #fff;
+  padding: 9px 11px;
+  font-size: 11px;
+  color: #4b5363;
+  line-height: 1.5;
+}
+.duration {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #737b8b;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.timeOptions {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.timeOptions > span {
+  display: grid;
+  place-items: center;
+  min-height: 34px;
+  font-size: 11px;
+  border: 1px solid #e1e5ed;
+  border-radius: 6px;
+  color: #525b6d;
+}
+.timeOptions .chosenTime {
+  border-color: #20283b;
+  background: #20283b;
+  color: white;
+}
+.confirm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  background: #20283b;
+  color: white;
+  border-radius: 7px;
+  padding: 11px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-top: 20px;
+}
+.dashboard {
+  line-height: 1.5;
+  background: #f6f7fa;
+  color: #202536;
+}
+.dashboardHeader {
+  padding: 20px 24px;
+  background: #fff;
+}
+.smallLogo {
+  width: 35px;
+  height: 35px;
+  border-radius: 8px;
+}
+.dashboardHeader strong {
+  font-size: 13px;
+}
+.dashboardHeader div > span {
+  font-size: 10px;
+}
+.tabs {
+  display: flex;
+  gap: 4px;
+  background: #fff;
+  border-bottom: 1px solid #e4e7ed;
+  padding: 0 24px;
+}
+.tabs > span {
+  padding: 12px 16px;
+  color: #7a8290;
+  font-size: 10px;
+  border-bottom: 2px solid transparent;
+}
+.tabs .activeTab {
+  color: #ce2436;
+  border-bottom-color: #ce2436;
+  font-weight: 600;
+}
+.profileContent {
+  padding: 24px;
+}
+.profileTitle {
+  margin-bottom: 16px;
+}
+.profileTitle strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+}
+.profileTitle > span {
+  display: block;
+  font-size: 10px;
+  color: #758090;
+  margin-top: 3px;
+}
+.profileBanner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #222b3f;
+  min-height: 88px;
+  border-radius: 10px;
+  padding: 22px;
+  margin-bottom: 20px;
+  color: white;
+  position: relative;
+  overflow: hidden;
+}
+.monogram {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid #ffffff3b;
+  background: #ffffff12;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.profileBanner strong {
+  display: block;
+  position: relative;
+  z-index: 1;
+  font-size: 14px;
+  font-weight: 500;
+}
+.profileBanner div > span {
+  display: block;
+  color: #bfc8dc;
+  font-size: 10px;
+  margin-top: 4px;
+}
+.bannerScissors {
+  position: absolute;
+  right: 18px;
+  bottom: -10px;
+  opacity: 0.13;
+  transform: none;
+}
+.imageSettings {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #e4e7ed;
+  background: white;
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 18px;
+}
+.imageSettings > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.miniMonogram {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  background: #eef0f5;
+  border-radius: 6px;
+  color: #47516b;
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.imageSettings strong {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+}
+.imageSettings small {
+  display: block;
+  font-size: 8px;
+  color: #7d8595;
+  margin-top: 2px;
+}
+.editLabel {
+  border: 1px solid #e4e7ed;
+  padding: 6px 8px;
+  border-radius: 5px;
+  font-size: 8px;
+  white-space: nowrap;
+}
+.profileFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+}
+.profileFooter > span:first-child {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  color: #647466;
+  font-size: 9px;
+}
+.saveLabel {
+  font-size: 10px;
+  color: white;
+  background: #222b3f;
+  border-radius: 6px;
+  padding: 9px 13px;
+}
+@media (max-width: 640px) {
+  .bookingCanvas {
+    padding: 16px;
+  }
+  .bookingCard {
+    padding: 18px;
+  }
+  .shopHeader {
+    gap: 10px;
+    padding-bottom: 17px;
+  }
+  .shopHeader strong {
+    font-size: 13px;
+  }
+  .shopHeader div > span {
+    font-size: 8px;
+  }
+  .logo {
+    width: 37px;
+    height: 37px;
+  }
+  .bookingHeading strong {
+    font-size: 21px;
+  }
+  .bookingHeading > span {
+    font-size: 10px;
+  }
+  .fieldRow {
+    gap: 8px;
+  }
+  .input {
+    font-size: 10px;
+    padding-inline: 8px;
+  }
+  .field > span {
+    font-size: 9px;
+  }
+  .dashboardHeader {
+    padding: 18px;
+  }
+  .tabs {
+    padding: 0 12px;
+  }
+  .tabs > span {
+    flex: 1;
+    padding-inline: 8px;
+    text-align: center;
+  }
+  .profileContent {
+    padding: 18px;
+  }
+  .profileBanner {
+    padding: 18px 14px;
+    gap: 10px;
+  }
+  .profileBanner strong {
+    font-size: 12px;
+  }
+  .profileBanner div > span {
+    font-size: 9px;
+  }
+  .monogram {
+    width: 38px;
+    height: 38px;
+    font-size: 13px;
+  }
+  .imageSettings small {
+    max-width: 120px;
+    font-size: 8px;
+  }
+  .editLabel {
+    font-size: 7px;
+    padding-inline: 5px;
+  }
+}

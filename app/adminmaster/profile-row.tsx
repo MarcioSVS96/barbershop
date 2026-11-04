@@ -5,7 +5,7 @@ import { Check, Pencil, Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { TableCell, TableRow } from "@/components/ui/table"
-import { deleteBarbershopProfile, prepareDeleteMemberAndUser } from "./actions"
+import { updateBarbershopUser, prepareDeleteMemberAndUser } from "./actions"
 
 type ShopRow = {
   id: string
@@ -34,11 +34,21 @@ type ProfileRowProps = {
   barbers: BarberRow[]
 }
 
-export function ProfileRow({ member, email, shop, shops, barbers }: ProfileRowProps) {
+export function ProfileRow({
+  member,
+  email,
+  shop,
+  shops,
+  barbers,
+}: ProfileRowProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [selectedShopId, setSelectedShopId] = useState(member.barbershop_id)
-  const [selectedRole, setSelectedRole] = useState<MemberRow["role"]>(member.role)
-  const [selectedBarberId, setSelectedBarberId] = useState(member.barber_id || "")
+  const [selectedRole, setSelectedRole] = useState<MemberRow["role"]>(
+    member.role,
+  )
+  const [selectedBarberId, setSelectedBarberId] = useState(
+    member.barber_id || "",
+  )
 
   const availableBarbers = useMemo(
     () => barbers.filter((barber) => barber.barbershop_id === selectedShopId),
@@ -48,12 +58,16 @@ export function ProfileRow({ member, email, shop, shops, barbers }: ProfileRowPr
   const barberLabel =
     member.role === "owner"
       ? "Administrador"
-      : barbers.find((barber) => barber.id === member.barber_id)?.name || "Barbeiro não vinculado"
+      : barbers.find((barber) => barber.id === member.barber_id)?.name ||
+        "Barbeiro não vinculado"
 
   const formId = `profile-${member.user_id}-${member.barbershop_id}`
 
   return (
-    <TableRow key={`${member.user_id}-${member.barbershop_id}`} className="transition hover:bg-muted/40">
+    <TableRow
+      key={`${member.user_id}-${member.barbershop_id}`}
+      className="transition hover:bg-muted/40"
+    >
       <TableCell>
         {isEditing ? (
           <select
@@ -64,8 +78,12 @@ export function ProfileRow({ member, email, shop, shops, barbers }: ProfileRowPr
             onChange={(event) => {
               const nextShopId = event.target.value
               setSelectedShopId(nextShopId)
-              const nextBarbers = barbers.filter((barber) => barber.barbershop_id === nextShopId)
-              if (!nextBarbers.some((barber) => barber.id === selectedBarberId)) {
+              const nextBarbers = barbers.filter(
+                (barber) => barber.barbershop_id === nextShopId,
+              )
+              if (
+                !nextBarbers.some((barber) => barber.id === selectedBarberId)
+              ) {
                 setSelectedBarberId("")
               }
             }}
@@ -78,16 +96,28 @@ export function ProfileRow({ member, email, shop, shops, barbers }: ProfileRowPr
           </select>
         ) : (
           <>
-            <div className="text-sm font-medium">{shop?.name || shop?.slug || member.barbershop_id}</div>
-            <div className="text-xs text-muted-foreground">/{shop?.slug || "-"}</div>
+            <div className="text-sm font-medium">
+              {shop?.name || shop?.slug || member.barbershop_id}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              /{shop?.slug || "-"}
+            </div>
           </>
         )}
       </TableCell>
 
       <TableCell>
-        <form id={formId} action={deleteBarbershopProfile} className="flex flex-col gap-2">
+        <form
+          id={formId}
+          action={updateBarbershopUser}
+          className="flex flex-col gap-2"
+        >
           <input type="hidden" name="user_id" value={member.user_id} />
-          <input type="hidden" name="original_barbershop_id" value={member.barbershop_id} />
+          <input
+            type="hidden"
+            name="current_barbershop_id"
+            value={member.barbershop_id}
+          />
           <Input
             name="email"
             type="email"
@@ -155,17 +185,35 @@ export function ProfileRow({ member, email, shop, shops, barbers }: ProfileRowPr
             onClick={() => setIsEditing((current) => !current)}
             aria-label={isEditing ? "Cancelar edição" : "Editar perfil"}
           >
-            {isEditing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+            {isEditing ? (
+              <X className="h-4 w-4" />
+            ) : (
+              <Pencil className="h-4 w-4" />
+            )}
           </Button>
           {isEditing ? (
-            <Button type="submit" size="icon" form={formId} aria-label="Salvar alterações">
+            <Button
+              type="submit"
+              size="icon"
+              form={formId}
+              aria-label="Salvar alterações"
+            >
               <Check className="h-4 w-4" />
             </Button>
           ) : null}
           <form action={prepareDeleteMemberAndUser} className="inline-flex">
             <input type="hidden" name="user_id" value={member.user_id} />
-            <input type="hidden" name="barbershop_id" value={member.barbershop_id} />
-            <Button type="submit" variant="outline" size="icon" aria-label="Excluir perfil">
+            <input
+              type="hidden"
+              name="barbershop_id"
+              value={member.barbershop_id}
+            />
+            <Button
+              type="submit"
+              variant="outline"
+              size="icon"
+              aria-label="Excluir perfil"
+            >
               <Trash2 className="h-4 w-4" />
             </Button>
           </form>
