@@ -4,11 +4,11 @@ A página `/` apresenta o produto, oferece uma simulação de agendamento e dire
 
 ## Conteúdo e contato
 
-- Marca preservada: Agenda Barber, com vermelho, branco e tons escuros.
+- Marca preservada: Agenda Barber, com vermelho, branco e tons escuros. As mesmas seções foram mantidas, com proporções, tipografia, espaçamento e enquadramentos revistos; as prévias permanecem retas.
 - Contato atual: `https://www.instagram.com/marciosaantos/`, centralizado em `contactUrl` em `app/page.tsx`.
 - Os valores de serviços na demonstração são fictícios e estão identificados como exemplos. Não são preços da assinatura.
 - Mensalidade, duração de teste e condições comerciais dependem de definição do proprietário. A página orienta consultar as condições na apresentação.
-- As capturas em `public/marketing` foram fornecidas pelo proprietário. Não incluem dados de clientes.
+- As prévias em `components/marketing/product-previews.tsx` usam a Barbearia Modelo, uma empresa fictícia. São componentes de apresentação, sem dados de empresas reais nem consultas ao banco. As capturas antigas foram removidas dos assets da versão atual.
 - Não há depoimentos, estatísticas de resultados ou promessas de redução de faltas sem comprovação.
 
 ## Funcionamento
@@ -23,7 +23,7 @@ O proxy retorna diretamente para `/`, pois a página comercial não utiliza sess
 - `./node_modules/.bin/tsc --noEmit`
 - `NEXT_TURBOPACK_EXPERIMENTAL_USE_SYSTEM_TLS_CERTS=1 npm run build`
 - Revisão no navegador da página compilada, incluindo simulação com seleção alternativa, reinício e FAQ.
-- Revisão em iframe de 390 px para conferir o layout de celular e o fluxo da demonstração.
+- Revisão em iframes de 390 e 320 px para conferir o layout de celular e o fluxo da demonstração.
 
 O ambiente de revisão precisou usar os certificados TLS do sistema para baixar as fontes Google já utilizadas no projeto. A configuração do repositório não foi alterada por esse motivo. O comando de preview gerenciado injeta flags de Vite incompatíveis com Next.js; a revisão visual usou uma cópia estática da página compilada e seus assets. O login, o painel e o banco de produção não foram exercitados.
 

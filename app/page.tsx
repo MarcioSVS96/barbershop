@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import Image from "next/image"
 import Link from "next/link"
 import {
   ArrowDown,
@@ -17,6 +16,10 @@ import {
   Wallet,
 } from "lucide-react"
 import { BookingDemo } from "@/components/marketing/booking-demo"
+import {
+  BookingPreview,
+  ProfilePreview,
+} from "@/components/marketing/product-previews"
 import styles from "./marketing.module.css"
 
 const contactUrl = "https://www.instagram.com/marciosaantos/"
@@ -213,18 +216,10 @@ export default function RootPage() {
               </span>
               <span className={styles.browserLabel}>CLIENTE</span>
             </div>
-            <Image
-              src="/marketing/agendamento.png"
-              alt="Tela de agendamento da Eleven Barbearia, com seleção de serviço, profissional, data e horário."
-              width={1763}
-              height={1208}
-              priority
-              sizes="(max-width: 900px) 100vw, 55vw"
-              className={styles.productImage}
-            />
+            <BookingPreview />
             <figcaption>
               <span className={styles.figureDot} />
-              Tela do sistema · exemplo de página personalizada
+              Prévia ilustrativa · barbearia fictícia
             </figcaption>
           </figure>
         </section>
@@ -253,8 +248,7 @@ export default function RootPage() {
             <div>
               <p className={styles.eyebrow}>MENOS IMPROVISO NA ROTINA</p>
               <h2 id="solutions-title">
-                Da marcação do horário
-                <br />
+                Da marcação do horário <br />
                 ao controle da barbearia.
               </h2>
             </div>
@@ -316,25 +310,16 @@ export default function RootPage() {
               <span>Seu espaço de gestão</span>
               <span className={styles.browserLabel}>BARBEARIA</span>
             </div>
-            <Image
-              src="/marketing/painel.png"
-              alt="Painel do barbeiro com menu de agendamentos, serviços, horários, financeiro e personalização do perfil da barbearia."
-              width={1763}
-              height={1469}
-              sizes="(max-width: 900px) 100vw, 50vw"
-              className={styles.productImage}
-            />
+            <ProfilePreview />
             <figcaption>
-              Tela do sistema · personalização da página da barbearia
+              Prévia ilustrativa · personalização com dados fictícios
             </figcaption>
           </figure>
           <div className={styles.panelCopy}>
             <p className={styles.eyebrow}>A IDENTIDADE É SUA</p>
             <h2 id="panel-title">
-              Sua barbearia.{" "}
-              <br />
-              Seu nome.{" "}
-              <br />
+              Sua barbearia. <br />
+              Seu nome. <br />
               <span>Seu próprio link.</span>
             </h2>
             <p>
