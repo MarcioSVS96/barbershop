@@ -23,6 +23,7 @@ import {
   BriefcaseBusiness,
   Users,
   Globe,
+  type LucideIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -55,14 +56,35 @@ import {
   ReceiptEditor,
   FormError,
   fieldClass,
+  panelClass,
   primaryClass,
 } from "./forms"
 
 const sections = [
-  { value: "today", name: "Hoje", Icon: LayoutDashboard },
-  { value: "agenda", name: "Agenda", Icon: CalendarDays },
-  { value: "cash", name: "Caixa", Icon: Wallet },
-  { value: "settings", name: "Configurações", Icon: Settings },
+  {
+    value: "today",
+    name: "Hoje",
+    detail: "Acompanhe os atendimentos do dia.",
+    Icon: LayoutDashboard,
+  },
+  {
+    value: "agenda",
+    name: "Agenda",
+    detail: "Organize reservas e horários bloqueados.",
+    Icon: CalendarDays,
+  },
+  {
+    value: "cash",
+    name: "Caixa",
+    detail: "Confira recebimentos, despesas e valores a receber.",
+    Icon: Wallet,
+  },
+  {
+    value: "settings",
+    name: "Configurações",
+    detail: "Gerencie a equipe e a página de agendamento.",
+    Icon: Settings,
+  },
 ] as const
 type Section = (typeof sections)[number]["value"]
 type Setup = "services" | "hours" | "team" | "page"
@@ -104,7 +126,7 @@ const sources = {
   balcao: "Balcão",
   telefone: "Telefone",
 }
-const panelClass = "rounded-2xl border border-slate-200 bg-white"
+const outlineClass = "min-h-11 rounded-xl border-slate-200 bg-white shadow-none hover:bg-slate-50 hover:text-slate-950"
 const dateLabel = new Intl.DateTimeFormat("pt-BR", {
   weekday: "long",
   day: "numeric",
@@ -134,8 +156,9 @@ function activeAppointment(appointment: Appointment) {
 function Status({ appointment }: { appointment: Appointment }) {
   return (
     <span
-      className={`inline-flex w-fit rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ring-inset ${statusStyles[appointment.status] ?? statusStyles.pending}`}
+      className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${statusStyles[appointment.status] ?? statusStyles.pending}`}
     >
+      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current opacity-75" />
       {statusLabels[appointment.status] || appointment.status}
     </span>
   )
@@ -151,8 +174,10 @@ function Empty({
   children?: ReactNode
 }) {
   return (
-    <div className="space-y-2 px-5 py-10 text-center">
-      <CalendarDays aria-hidden className="mx-auto size-5 text-slate-500" />
+    <div className="space-y-2 px-5 py-9 text-center sm:py-12">
+      <div className="mx-auto mb-3 grid size-12 place-items-center rounded-2xl bg-slate-100 text-slate-600">
+        <CalendarDays aria-hidden className="size-5" />
+      </div>
       <p className="font-semibold text-slate-900">{title}</p>
       <p className="mx-auto max-w-md text-sm text-slate-600">{detail}</p>
       {children ? (
@@ -161,6 +186,35 @@ function Empty({
         </div>
       ) : null}
     </div>
+  )
+}
+
+function TodayMetric({
+  Icon,
+  label,
+  value,
+  onClick,
+}: {
+  Icon: LucideIcon
+  label: string
+  value: number | string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`${panelClass} flex min-h-22 cursor-pointer flex-col gap-2.5 p-3.5 text-left transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700 min-[390px]:flex-row min-[390px]:items-center sm:p-4`}
+    >
+      <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#eef2f7] text-[#283b55]">
+        <Icon className="size-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-medium text-slate-600">{label}</span>
+        <span className="mt-0.5 block break-words text-lg font-semibold tracking-tight tabular-nums sm:text-xl">{value}</span>
+      </span>
+      <ChevronRight aria-hidden className="hidden size-4 shrink-0 text-slate-500 xl:block" />
+    </button>
   )
 }
 
@@ -175,46 +229,38 @@ function BookingRows({
 }) {
   return (
     <ul className="divide-y divide-slate-100">
-      {appointments.map((a) => (
-        <li
-          key={a.id}
-          className="grid grid-cols-[4.25rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-4 sm:grid-cols-[6rem_minmax(0,1fr)_auto] sm:gap-4 sm:px-5"
-        >
-          <div>
-            {showDate ? (
-              <p className="text-xs text-slate-600">
-                {displayDate(a.appointment_date)}
-              </p>
-            ) : null}
-            <p className="font-semibold tabular-nums">
-              {a.appointment_time.slice(0, 5)}
-            </p>
-            <p className="text-xs tabular-nums text-slate-600">
-              até{" "}
-              {endOfService(a.appointment_time, a.service_duration_at_booking)}
-            </p>
-          </div>
-          <div className="min-w-0 space-y-1.5">
-            <p className="break-words text-sm font-semibold">
-              {a.clients?.name || "Cliente"}
-            </p>
-            <p className="break-words text-xs text-slate-600">
-              {a.services?.name || "Serviço"}
-              {a.barbers?.name ? ` · ${a.barbers.name}` : ""}
-            </p>
-            <Status appointment={a} />
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="shadow-none"
-            onClick={() => select(a.id)}
-            aria-label={`Detalhes de ${a.clients?.name || "cliente"} às ${a.appointment_time.slice(0, 5)}`}
-          >
-            Detalhes
-          </Button>
-        </li>
-      ))}
+      {appointments.map((a) => {
+        const time = a.appointment_time.slice(0, 5)
+        return (
+          <li key={a.id}>
+            <button
+              type="button"
+              onClick={() => select(a.id)}
+              aria-label={`Detalhes de ${a.clients?.name || "cliente"}${showDate ? ` em ${displayDate(a.appointment_date)}` : ""} às ${time}. ${statusLabels[a.status]}`}
+              className="group grid w-full cursor-pointer grid-cols-[3.5rem_minmax(0,1fr)_1rem] items-center gap-3 px-3.5 py-3.5 text-left transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-slate-700 sm:grid-cols-[4.5rem_minmax(0,1fr)_1.25rem] sm:gap-4 sm:px-5"
+            >
+              <span className="rounded-xl bg-slate-100 px-1 py-2 text-center tabular-nums sm:px-1.5">
+                {showDate ? <span className="block text-xs text-slate-600">{displayDate(a.appointment_date)}</span> : null}
+                <span className="block text-sm font-semibold text-slate-950 sm:text-base">{time}</span>
+                <span className="block whitespace-nowrap text-[10px] text-slate-600 sm:text-[11px]">
+                  até {endOfService(a.appointment_time, a.service_duration_at_booking)}
+                </span>
+              </span>
+              <span className="flex min-w-0 flex-col items-start gap-1.5 md:flex-row md:items-center md:justify-between md:gap-4">
+                <span className="min-w-0">
+                  <span className="block break-words text-sm font-semibold">{a.clients?.name || "Cliente"}</span>
+                  <span className="mt-0.5 block break-words text-xs leading-relaxed text-slate-600">
+                    {a.services?.name || "Serviço"}
+                    {a.barbers?.name ? ` · ${a.barbers.name}` : ""}
+                  </span>
+                </span>
+                <Status appointment={a} />
+              </span>
+              <ChevronRight aria-hidden className="size-4 text-slate-500 group-hover:text-slate-950" />
+            </button>
+          </li>
+        )
+      })}
     </ul>
   )
 }
@@ -247,6 +293,7 @@ export function BarberWorkspace({
   const [busy, setBusy] = useState(false)
   const [confirm, setConfirm] = useState<"cancelled" | "no_show">()
   const owner = role === "owner"
+  const currentSection = sections.find((item) => item.value === section) ?? sections[0]
   const today = shopDate()
   const now = shopTime()
   const pageUrl = `/${shop.slug}`
@@ -311,15 +358,27 @@ export function BarberWorkspace({
     close()
     if (nextDate) {
       setDate(nextDate)
-      setSection("agenda")
+      navigate("agenda")
       setProfessional("")
     }
     setMessage(text)
     router.refresh()
   }
 
+  function navigate(nextSection: Section) {
+    if (nextSection !== section) window.scrollTo(0, 0)
+    setSection(nextSection)
+  }
+
+  function openTodayAgenda() {
+    setDate(today)
+    setWeek(false)
+    setProfessional("")
+    navigate("agenda")
+  }
+
   function showSetup(tab: Setup) {
-    setSection("settings")
+    navigate("settings")
     setSetup(tab)
   }
 
@@ -376,15 +435,6 @@ export function BarberWorkspace({
     }
   }
 
-  const newBooking = (
-    <Button
-      className={primaryClass}
-      onClick={() => setOpen({ type: "new" })}
-      disabled={!canBook}
-    >
-      <Plus aria-hidden /> Novo agendamento
-    </Button>
-  )
   const professionalFilter =
     owner && barbers.length > 1 ? (
       <select
@@ -403,10 +453,10 @@ export function BarberWorkspace({
     ) : null
 
   return (
-    <div className="min-h-dvh bg-[#f4f6f9] text-slate-950 lg:grid lg:grid-cols-[220px_minmax(0,1fr)]">
-      <aside className="sticky top-0 z-20 bg-[#131e32] text-white lg:flex lg:h-dvh lg:flex-col">
-        <div className="flex items-center gap-3 px-4 py-4 sm:px-6 lg:px-5 lg:py-7">
-          <div className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#e2283d]">
+    <div className="min-h-dvh bg-[#f5f7fa] text-slate-950 lg:grid lg:grid-cols-[232px_minmax(0,1fr)]">
+      <aside className="sticky top-0 z-20 border-b border-slate-200 bg-white lg:flex lg:h-dvh lg:flex-col lg:border-0 lg:bg-[#121c2e] lg:text-white">
+        <div className="flex items-center gap-2.5 px-4 py-2.5 sm:px-6 lg:px-5 lg:py-6">
+          <div className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#c92037] text-white ring-1 ring-white/15">
             {logoUrl ? (
               <img src={logoUrl} alt="" className="size-full object-cover" />
             ) : (
@@ -415,25 +465,35 @@ export function BarberWorkspace({
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold">{shop.name}</p>
-            <p className="text-xs text-slate-300">
+            <p className="truncate text-xs text-slate-600 lg:text-slate-300">
               {owner ? "Painel da barbearia" : "Painel do profissional"}
             </p>
           </div>
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className="size-11 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-950 lg:hidden"
+          >
+            <a href={pageUrl} target="_blank" rel="noopener noreferrer" aria-label="Abrir página de agendamento">
+              <ArrowUpRight aria-hidden className="size-5" />
+            </a>
+          </Button>
           <form action="/auth/logout" method="post" className="lg:hidden">
             <Button
               type="submit"
               variant="ghost"
               size="icon"
               aria-label="Sair"
-              className="text-white hover:bg-white/10 hover:text-white"
+              className="size-11 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-950"
             >
-              <LogOut aria-hidden />
+              <LogOut aria-hidden className="size-5" />
             </Button>
           </form>
         </div>
         <nav
           aria-label="Painel do Barbeiro"
-          className="grid grid-cols-4 gap-1 px-2 pb-3 sm:px-4 lg:mt-4 lg:flex lg:flex-col"
+          className="fixed inset-x-0 bottom-0 grid grid-cols-4 gap-1 border-t border-slate-200 bg-white px-2 pt-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))] shadow-[0_-4px_20px_#0f172a08] lg:static lg:mt-3 lg:grid-cols-1 lg:border-0 lg:bg-transparent lg:px-3 lg:py-0 lg:shadow-none"
         >
           {sections.map(({ value, name, Icon }) => (
             <button
@@ -441,31 +501,39 @@ export function BarberWorkspace({
               type="button"
               aria-current={section === value ? "page" : undefined}
               onClick={() => {
-                setSection(value)
+                navigate(value)
                 setActionError("")
                 setMessage("")
               }}
-              className={`flex min-w-0 cursor-pointer flex-col items-center gap-1 rounded-lg px-1 py-2.5 text-[10px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-white sm:text-xs lg:flex-row lg:gap-3 lg:px-3 lg:text-sm ${section === value ? "bg-white/12 text-white" : "text-slate-300 hover:bg-white/8"}`}
+              className={`relative flex min-h-12 min-w-0 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-slate-700 lg:flex-row lg:justify-start lg:gap-3 lg:px-4 lg:py-2.5 lg:text-sm lg:focus-visible:outline-white ${section === value ? "bg-slate-100 text-slate-950 lg:bg-white/10 lg:text-white" : "text-slate-600 hover:bg-slate-50 lg:text-slate-300 lg:hover:bg-white/5"}`}
             >
-              <Icon aria-hidden className="size-4 shrink-0" /> {name}
+              {section === value ? (
+                <span aria-hidden className="absolute top-0 h-0.5 w-4 rounded-full bg-[#c92037] lg:top-auto lg:left-0 lg:h-5 lg:w-0.5 lg:bg-[#ff5266]" />
+              ) : null}
+              <Icon aria-hidden className="size-5 shrink-0 lg:size-4" />
+              {value === "settings" ? (
+                <>
+                  <span className="lg:hidden">Ajustes</span>
+                  <span className="hidden lg:inline">{name}</span>
+                </>
+              ) : name}
             </button>
           ))}
         </nav>
-        <div className="mt-auto hidden space-y-1 border-t border-white/10 p-4 lg:block">
+        <div className="mt-auto hidden space-y-1 border-t border-white/10 p-3 lg:block">
           <a
             href={pageUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-between rounded-lg px-3 py-2.5 text-xs text-slate-300 hover:bg-white/8 hover:text-white"
+            className="flex min-h-11 items-center gap-2.5 rounded-xl px-4 text-xs font-medium text-slate-300 hover:bg-white/8 hover:text-white focus-visible:outline-2 focus-visible:outline-white"
           >
-            Página de agendamento{" "}
-            <ArrowUpRight aria-hidden className="size-4" />
+            <ArrowUpRight aria-hidden className="size-4 shrink-0" /> Página de agendamento
           </a>
           <form action="/auth/logout" method="post">
             <Button
               type="submit"
               variant="ghost"
-              className="w-full justify-start text-slate-300 hover:bg-white/8 hover:text-white"
+              className="min-h-11 w-full justify-start gap-2.5 rounded-xl px-4 text-slate-300 hover:bg-white/8 hover:text-white"
             >
               <LogOut aria-hidden /> Sair
             </Button>
@@ -474,43 +542,40 @@ export function BarberWorkspace({
       </aside>
 
       <main className="min-w-0">
-        <div className="hidden h-14 items-center justify-between border-b border-slate-200 bg-white px-8 text-xs text-slate-600 lg:flex">
-          <span>
-            Agenda Barber{" "}
-            <span aria-hidden className="px-1.5">
-              /
-            </span>{" "}
-            {sections.find((s) => s.value === section)?.name}
-          </span>
-          <span className="font-medium">{displayDate(today, true)}</span>
-        </div>
-        <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-          <header className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h1 className="text-[1.8rem] font-semibold leading-tight tracking-tight sm:text-[2.15rem]">
-                {sections.find((s) => s.value === section)?.name}
+        <div className="mx-auto max-w-6xl space-y-5 px-4 pt-5 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:space-y-6 sm:px-6 sm:pt-7 lg:px-8 lg:pt-8 lg:pb-10">
+          <header className="flex flex-wrap items-end justify-between gap-3.5 sm:gap-4">
+            <div className="min-w-0">
+              {section === "today" ? (
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-600">
+                  <CalendarDays aria-hidden className="size-3.5" />
+                  <span className="first-letter:uppercase">{displayDate(today, true)}</span>
+                </p>
+              ) : null}
+              <h1 className="text-[1.8rem] font-semibold leading-tight tracking-tight sm:text-4xl">
+                {currentSection.name}
               </h1>
-              <p className="mt-1.5 text-sm text-slate-600">
-                {section === "today"
-                  ? displayDate(today, true)
-                  : section === "agenda"
-                    ? "Acompanhe e organize os atendimentos."
-                    : section === "cash"
-                      ? "Acompanhe o dinheiro recebido e o que falta registrar."
-                      : "Organize a operação e a página da barbearia."}
+              <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+                {section === "settings" && !owner ? "Atualize seus dados profissionais." : currentSection.detail}
               </p>
             </div>
             {section === "today" || section === "agenda" ? (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                <Button
+                  className={`${primaryClass} grow sm:grow-0`}
+                  onClick={() => setOpen({ type: "new" })}
+                  disabled={!canBook}
+                >
+                  <Plus aria-hidden /> Novo agendamento
+                </Button>
                 {section === "agenda" && owner ? (
                   <Button
                     variant="outline"
+                    className={`${outlineClass} grow sm:grow-0`}
                     onClick={() => setOpen({ type: "block" })}
                   >
                     <Clock3 aria-hidden /> Bloquear período
                   </Button>
                 ) : null}
-                {newBooking}
               </div>
             ) : null}
           </header>
@@ -534,10 +599,10 @@ export function BarberWorkspace({
             <>
               {setupMissing ? (
                 <section
-                  className={`${panelClass} flex flex-wrap items-center justify-between gap-3 p-4`}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:px-5"
                 >
                   <div>
-                    <h2 className="font-semibold">Prepare sua agenda</h2>
+                    <h2 className="font-semibold text-amber-950">Prepare sua agenda</h2>
                     <p className="mt-1 text-sm text-slate-600">
                       Cadastre um profissional, um serviço ativo e os horários
                       de atendimento.
@@ -545,6 +610,7 @@ export function BarberWorkspace({
                   </div>
                   <Button
                     variant="outline"
+                    className={outlineClass}
                     onClick={() =>
                       showSetup(
                         !barbers.length
@@ -563,28 +629,47 @@ export function BarberWorkspace({
                   </Button>
                 </section>
               ) : null}
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-                <section className="flex min-h-44 flex-col justify-between rounded-2xl bg-[#17263e] p-5 text-white sm:p-6">
-                  <p className="flex items-center gap-2 text-xs font-medium text-slate-300">
-                    <Clock3 aria-hidden className="size-4" /> Próximo
-                    atendimento
-                  </p>
-                  <div className="my-4">
-                    <p className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                      {next
-                        ? `${next.appointment_time.slice(0, 5)} · ${next.clients?.name || "Cliente"}`
-                        : "Sem próximos horários"}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-300">
-                      {next
-                        ? `${next.services?.name || "Serviço"} · ${next.service_duration_at_booking ?? 30} min`
-                        : "Consulte a agenda ou compartilhe o link com os clientes."}
-                    </p>
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-4">
+                <section className="relative isolate flex min-w-0 flex-col items-start justify-between gap-4 overflow-hidden rounded-2xl bg-[#16243b] bg-[radial-gradient(ellipse_at_top_right,#364f72,transparent_70%)] p-5 text-white shadow-sm sm:p-6">
+                  <span aria-hidden className="pointer-events-none absolute -top-24 -right-12 -z-10 size-64 rounded-full border border-white/10 ring-28 ring-white/4" />
+                  <div className="flex w-full flex-wrap items-center justify-between gap-2">
+                    <h2 className="flex items-center gap-2 text-sm font-medium text-slate-200">
+                      <span aria-hidden className="grid size-8 place-items-center rounded-lg bg-white/10">
+                        <Clock3 className="size-4" />
+                      </span>
+                      Próximo atendimento
+                    </h2>
+                    {next ? <Status appointment={next} /> : null}
                   </div>
+                  {next ? (
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                        <p className="text-4xl font-semibold tracking-tight tabular-nums sm:text-[2.75rem]">
+                          {next.appointment_time.slice(0, 5)}
+                        </p>
+                        <p className="min-w-0 break-words text-lg font-semibold sm:text-xl">
+                          {next.clients?.name || "Cliente"}
+                        </p>
+                      </div>
+                      <p className="break-words text-sm leading-relaxed text-slate-200">
+                        {next.services?.name || "Serviço"} · {next.service_duration_at_booking ?? 30} min
+                        {next.barbers?.name ? ` · ${next.barbers.name}` : ""}
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-xl font-semibold tracking-tight sm:text-2xl">
+                        Sem próximos atendimentos
+                      </p>
+                      <p className="mt-1 text-sm leading-relaxed text-slate-200">
+                        Compartilhe o link para receber novos agendamentos.
+                      </p>
+                    </div>
+                  )}
                   {next ? (
                     <Button
                       variant="ghost"
-                      className="w-fit px-0 text-white hover:bg-transparent hover:text-slate-200"
+                      className="min-h-11 rounded-xl bg-white/10 text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/70"
                       onClick={() => setOpen({ type: "details", id: next.id })}
                     >
                       Ver atendimento <ChevronRight aria-hidden />
@@ -592,56 +677,41 @@ export function BarberWorkspace({
                   ) : (
                     <Button
                       variant="ghost"
-                      className="w-fit px-0 text-white hover:bg-transparent hover:text-slate-200"
+                      className="min-h-11 rounded-xl bg-white/10 text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/70"
                       onClick={copyLink}
                     >
                       <Copy aria-hidden /> Copiar link da agenda
                     </Button>
                   )}
                 </section>
-                <section
-                  className={`${panelClass} grid grid-cols-2 divide-x divide-slate-200 px-2 py-5 lg:grid-cols-1 lg:divide-x-0 lg:divide-y lg:py-2`}
-                >
-                  <button
-                    onClick={() => {
-                      setDate(today)
-                      setWeek(false)
-                      setProfessional("")
-                      setSection("agenda")
-                    }}
-                    className="min-w-0 cursor-pointer px-4 py-3 text-left hover:bg-slate-50"
-                  >
-                    <p className="text-xs text-slate-600">Horários restantes</p>
-                    <p className="mt-1 text-2xl font-semibold tabular-nums">
-                      {upcoming.length}
-                    </p>
-                  </button>
-                  <button
+                <section aria-label="Resumo de hoje" className="grid grid-cols-2 gap-3 lg:grid-cols-1">
+                  <TodayMetric
+                    Icon={CalendarDays}
+                    label="Atendimentos a seguir"
+                    value={upcoming.length}
+                    onClick={openTodayAgenda}
+                  />
+                  <TodayMetric
+                    Icon={Wallet}
+                    label="Recebido hoje"
+                    value={money(receivedToday)}
                     onClick={() => {
                       setProfessional("")
-                      setSection("cash")
+                      navigate("cash")
                     }}
-                    className="min-w-0 cursor-pointer px-4 py-3 text-left hover:bg-slate-50"
-                  >
-                    <p className="text-xs text-slate-600">Recebido hoje</p>
-                    <p className="mt-1 break-words text-xl font-semibold tabular-nums sm:text-2xl">
-                      {money(receivedToday)}
-                    </p>
-                  </button>
+                  />
                 </section>
               </div>
               <section className={panelClass}>
-                <header className="flex items-center justify-between gap-2 border-b border-slate-200 p-4 sm:px-5">
-                  <h2 className="font-semibold">Agenda de hoje</h2>
+                <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 sm:px-5">
+                  <div>
+                    <h2 className="font-semibold">Agenda de hoje</h2>
+                    <p className="mt-0.5 text-xs text-slate-600">{bookedToday.length} {bookedToday.length === 1 ? "atendimento" : "atendimentos"}</p>
+                  </div>
                   <Button
                     variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setDate(today)
-                      setWeek(false)
-                      setProfessional("")
-                      setSection("agenda")
-                    }}
+                    className="min-h-11 rounded-xl text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-950"
+                    onClick={openTodayAgenda}
                   >
                     Ver agenda <ChevronRight aria-hidden />
                   </Button>
@@ -663,12 +733,13 @@ export function BarberWorkspace({
 
           {section === "agenda" ? (
             <>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex max-w-full items-center gap-1">
+              <section aria-label="Filtros da agenda" className={`${panelClass} flex flex-wrap items-center gap-2.5 p-3 sm:gap-3 sm:p-4`}>
+                <div className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 sm:w-auto sm:grid-cols-[auto_10rem_auto]">
                   <Button
                     variant="outline"
                     size="icon"
-                    aria-label="Dia anterior"
+                    className={`${outlineClass} size-11`}
+                    aria-label={week ? "Semana anterior" : "Dia anterior"}
                     onClick={() => setDate(shiftDate(date, week ? -7 : -1))}
                   >
                     <ChevronLeft aria-hidden />
@@ -677,7 +748,7 @@ export function BarberWorkspace({
                     type="date"
                     aria-label="Data da agenda"
                     value={date}
-                    className="h-10 min-w-0 bg-white"
+                    className="h-11 min-w-0 rounded-xl border-slate-200 bg-white shadow-none"
                     onChange={(event) => {
                       if (event.target.value) setDate(event.target.value)
                     }}
@@ -685,30 +756,40 @@ export function BarberWorkspace({
                   <Button
                     variant="outline"
                     size="icon"
-                    aria-label="Próximo dia"
+                    className={`${outlineClass} size-11`}
+                    aria-label={week ? "Próxima semana" : "Próximo dia"}
                     onClick={() => setDate(shiftDate(date, week ? 7 : 1))}
                   >
                     <ChevronRight aria-hidden />
                   </Button>
                 </div>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setDate(today)
-                    setWeek(false)
-                  }}
-                >
-                  Hoje
-                </Button>
-                <Button
-                  variant={week ? "default" : "outline"}
-                  aria-pressed={week}
-                  onClick={() => setWeek(!week)}
-                >
-                  7 dias
-                </Button>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <Button
+                    variant="outline"
+                    className={outlineClass}
+                    onClick={() => {
+                      setDate(today)
+                      setWeek(false)
+                    }}
+                  >
+                    Hoje
+                  </Button>
+                  <div role="group" aria-label="Período da agenda" className="inline-flex gap-0.5 rounded-xl bg-slate-100 p-0.5">
+                    {[{ label: "Dia", week: false }, { label: "7 dias", week: true }].map((view) => (
+                      <Button
+                        key={view.label}
+                        variant="ghost"
+                        aria-pressed={week === view.week}
+                        className={`min-h-10 rounded-[0.625rem] text-xs ${week === view.week ? "bg-white font-semibold text-slate-950 shadow-xs hover:bg-white" : "text-slate-600 hover:bg-slate-200"} hover:text-slate-950`}
+                        onClick={() => setWeek(view.week)}
+                      >
+                        {view.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
                 {professionalFilter}
-              </div>
+              </section>
               <section className={panelClass}>
                 <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 p-4 sm:px-5">
                   <h2 className="font-semibold first-letter:uppercase">
@@ -716,8 +797,8 @@ export function BarberWorkspace({
                       ? `${displayDate(date)} a ${displayDate(shiftDate(date, 6))}`
                       : displayDate(date, true)}
                   </h2>
-                  <span className="text-xs text-slate-600">
-                    {filteredAppointments.length} atendimentos
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                    {filteredAppointments.length} {filteredAppointments.length === 1 ? "atendimento" : "atendimentos"}
                   </span>
                 </header>
                 {filteredAppointments.length ? (
@@ -793,7 +874,7 @@ export function BarberWorkspace({
               {owner ? (
                 <nav
                   aria-label="Configurações da barbearia"
-                  className="grid grid-cols-2 gap-2 lg:grid-cols-4"
+                  className="grid grid-cols-2 gap-2.5 lg:grid-cols-4 lg:gap-3"
                 >
                   {(
                     [
@@ -828,19 +909,16 @@ export function BarberWorkspace({
                       type="button"
                       aria-pressed={setup === value}
                       onClick={() => setSetup(value)}
-                      className={`flex min-w-0 cursor-pointer items-start gap-2 rounded-xl border px-3 py-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700 sm:items-center sm:gap-3 sm:px-4 ${setup === value ? "border-[#16243b] bg-[#16243b] text-white" : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50"}`}
+                      className={`${panelClass} flex cursor-pointer flex-col items-start gap-2 p-3 text-left transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700 aria-pressed:border-slate-500 aria-pressed:bg-[#edf2f8] aria-pressed:ring-1 aria-pressed:ring-slate-500 sm:flex-row sm:items-center sm:gap-2.5 lg:flex-col lg:items-start xl:flex-row xl:items-center`}
                     >
-                      <Icon
-                        aria-hidden
-                        className="mt-0.5 size-4 shrink-0 sm:mt-0"
-                      />
+                      <span aria-hidden className={`grid size-8 shrink-0 place-items-center rounded-lg ${setup === value ? "bg-[#16243b] text-white" : "bg-slate-100 text-slate-600"}`}>
+                        <Icon className="size-4" />
+                      </span>
                       <span className="min-w-0">
                         <span className="block break-words text-sm font-semibold">
                           {label}
                         </span>
-                        <span
-                          className={`mt-0.5 block text-xs ${setup === value ? "text-slate-200" : "text-slate-600"}`}
-                        >
+                        <span className="mt-0.5 block text-xs text-slate-600">
                           {detail}
                         </span>
                       </span>
@@ -848,7 +926,7 @@ export function BarberWorkspace({
                   ))}
                 </nav>
               ) : null}
-              <div className="[&_[data-slot=card]]:shadow-none">
+              <div className="[&_[data-slot=card]]:border-slate-200 [&_[data-slot=card]]:shadow-xs">
                 {owner && setup === "services" ? (
                   <ServiceManagement
                     barbershopId={shop.id}

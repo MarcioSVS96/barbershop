@@ -20,9 +20,7 @@ import {
 } from "@/lib/barber/expenses"
 import { money, shopDate } from "@/lib/barber/time"
 import type { Appointment, Payment } from "@/lib/types"
-import { BarberSheet, fieldClass, FormError, primaryClass } from "./forms"
-
-const panel = "overflow-hidden rounded-2xl border border-slate-200 bg-white"
+import { BarberSheet, fieldClass, FormError, panelClass, primaryClass } from "./forms"
 const dateLabel = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",
@@ -204,12 +202,12 @@ export function CashView({
   return (
     <div className="space-y-5">
       <section
-        className={`${panel} px-4 py-4 sm:px-5`}
+        className={`${panelClass} p-4 sm:px-5`}
         aria-label="Filtros do caixa"
       >
         <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1.5">
+          <div className="flex w-full flex-wrap items-end gap-3 sm:w-auto">
+            <div className="min-w-0 flex-1 space-y-1.5 sm:flex-none">
               <Label
                 htmlFor="cash-period"
                 className="text-xs font-medium text-slate-600"
@@ -218,7 +216,7 @@ export function CashView({
               </Label>
               <select
                 id="cash-period"
-                className={`${fieldClass} min-w-36`}
+                className={`${fieldClass} sm:min-w-36`}
                 value={period}
                 onChange={(event) => setPeriod(event.target.value)}
               >
@@ -232,7 +230,7 @@ export function CashView({
           </div>
           {shopTotals && expensesAvailable ? (
             <Button
-              className={primaryClass}
+              className={`${primaryClass} w-full sm:w-auto`}
               onClick={() => {
                 setError("")
                 setMessage("")
@@ -283,14 +281,14 @@ export function CashView({
       {validPeriod ? (
         <>
           <div
-            className={`grid gap-3 ${shopTotals ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}
+            className={`grid grid-cols-2 gap-3 ${shopTotals ? "sm:grid-cols-3" : ""}`}
           >
             {shopTotals ? (
-              <section className="rounded-2xl bg-[#16243b] p-5 text-white">
+              <section className="col-span-2 min-w-0 rounded-2xl bg-[#16243b] bg-[radial-gradient(ellipse_at_top_right,#354d6d,transparent_75%)] p-4 text-white shadow-sm sm:col-span-1 sm:p-5">
                 <p className="flex items-center gap-2 text-sm text-slate-200">
                   <Wallet aria-hidden className="size-4" /> Saldo do período
                 </p>
-                <p className="mt-2 break-words text-2xl font-semibold tabular-nums">
+                <p className="mt-2 break-words text-2xl font-semibold tracking-tight tabular-nums sm:text-[1.65rem]">
                   {receiptsAvailable && expensesAvailable
                     ? money((totalReceived - totalSpent) / 100)
                     : "Indisponível"}
@@ -300,34 +298,36 @@ export function CashView({
                 </p>
               </section>
             ) : null}
-            <section className={`${panel} p-5`}>
-              <p className="flex items-center gap-2 text-sm text-slate-600">
+            <section className={`${panelClass} p-3.5 sm:p-5`}>
+              <p className="flex flex-col items-start gap-1.5 text-xs font-medium text-slate-600 sm:flex-row sm:items-center sm:gap-2 sm:text-sm">
                 <ArrowDownLeft
                   aria-hidden
                   className="size-4 text-emerald-700"
                 />{" "}
                 Recebido no período
               </p>
-              <p className="mt-2 break-words text-2xl font-semibold tabular-nums">
+              <p className="mt-2 break-words text-lg font-semibold tracking-tight tabular-nums sm:text-2xl">
                 {receiptsAvailable
                   ? money(totalReceived / 100)
                   : "Indisponível"}
               </p>
             </section>
             {shopTotals ? (
-              <section className={`${panel} p-5`}>
-                <p className="flex items-center gap-2 text-sm text-slate-600">
+              <section className={`${panelClass} p-3.5 sm:p-5`}>
+                <p className="flex flex-col items-start gap-1.5 text-xs font-medium text-slate-600 sm:flex-row sm:items-center sm:gap-2 sm:text-sm">
                   <ArrowUpRight aria-hidden className="size-4 text-amber-800" />{" "}
                   Despesas pagas
                 </p>
-                <p className="mt-2 break-words text-2xl font-semibold tabular-nums">
+                <p className="mt-2 break-words text-lg font-semibold tracking-tight tabular-nums sm:text-2xl">
                   {expensesAvailable ? money(totalSpent / 100) : "Indisponível"}
                 </p>
               </section>
             ) : (
-              <section className={`${panel} p-5`}>
-                <p className="text-sm text-slate-600">Atendimentos a receber</p>
-                <p className="mt-2 text-2xl font-semibold tabular-nums">
+              <section className={`${panelClass} p-3.5 sm:p-5`}>
+                <p className="flex flex-col items-start gap-1.5 text-xs font-medium text-slate-600 sm:flex-row sm:items-center sm:gap-2 sm:text-sm">
+                  <ReceiptText aria-hidden className="size-4 shrink-0 text-slate-700" /> Atendimentos a receber
+                </p>
+                <p className="mt-2 break-words text-lg font-semibold tracking-tight tabular-nums sm:text-2xl">
                   {receiptsAvailable && !loadErrors.includes("agendamentos")
                     ? unpaid.length
                     : "Indisponível"}
@@ -337,7 +337,7 @@ export function CashView({
           </div>
 
           {receiptsAvailable && unpaid.length ? (
-            <section className={panel}>
+            <section className={panelClass}>
               <h2 className="border-b border-slate-200 px-4 py-4 font-semibold sm:px-5">
                 Concluídos a receber
               </h2>
@@ -370,7 +370,7 @@ export function CashView({
             </section>
           ) : null}
 
-          <section className={panel}>
+          <section className={panelClass}>
             <header className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-4 sm:px-5">
               <h2 className="font-semibold">
                 {shopTotals ? "Movimentações" : "Recebimentos registrados"}
