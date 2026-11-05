@@ -231,27 +231,31 @@ function BookingRows({
     <ul className="divide-y divide-slate-100">
       {appointments.map((a) => {
         const time = a.appointment_time.slice(0, 5)
+        const end = endOfService(a.appointment_time, a.service_duration_at_booking)
+        const client = a.clients?.name || "Cliente"
+        const service = a.services?.name || "Serviço"
+        const barber = a.barbers?.name
         return (
           <li key={a.id}>
             <button
               type="button"
               onClick={() => select(a.id)}
-              aria-label={`Detalhes de ${a.clients?.name || "cliente"}${showDate ? ` em ${displayDate(a.appointment_date)}` : ""} às ${time}. ${statusLabels[a.status]}`}
+              aria-label={`Detalhes de ${client}${showDate ? ` em ${displayDate(a.appointment_date)}` : ""}, das ${time} às ${end}. ${service}${barber ? ` com ${barber}` : ""}. ${statusLabels[a.status]}.`}
               className="group grid w-full cursor-pointer grid-cols-[3.5rem_minmax(0,1fr)_1rem] items-center gap-3 px-3.5 py-3.5 text-left transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-slate-700 sm:grid-cols-[4.5rem_minmax(0,1fr)_1.25rem] sm:gap-4 sm:px-5"
             >
               <span className="rounded-xl bg-slate-100 px-1 py-2 text-center tabular-nums sm:px-1.5">
                 {showDate ? <span className="block text-xs text-slate-600">{displayDate(a.appointment_date)}</span> : null}
                 <span className="block text-sm font-semibold text-slate-950 sm:text-base">{time}</span>
                 <span className="block whitespace-nowrap text-[10px] text-slate-600 sm:text-[11px]">
-                  até {endOfService(a.appointment_time, a.service_duration_at_booking)}
+                  até {end}
                 </span>
               </span>
               <span className="flex min-w-0 flex-col items-start gap-1.5 md:flex-row md:items-center md:justify-between md:gap-4">
                 <span className="min-w-0">
-                  <span className="block break-words text-sm font-semibold">{a.clients?.name || "Cliente"}</span>
+                  <span className="block break-words text-sm font-semibold">{client}</span>
                   <span className="mt-0.5 block break-words text-xs leading-relaxed text-slate-600">
-                    {a.services?.name || "Serviço"}
-                    {a.barbers?.name ? ` · ${a.barbers.name}` : ""}
+                    {service}
+                    {barber ? ` · ${barber}` : ""}
                   </span>
                 </span>
                 <Status appointment={a} />
