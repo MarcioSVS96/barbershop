@@ -1,20 +1,24 @@
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { BookingForm } from "@/components/booking-form"
 import { Scissors } from "lucide-react"
 import { notFound } from "next/navigation"
+
+export const dynamic = "force-dynamic"
 
 export default async function PublicBookingPage({
   params,
 }: {
   params: Promise<{ slug: string }>
 }) {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   const { slug } = await params
 
   // ✅ FIX: só permite rota pública se a barbearia estiver ativa
   const { data: shop, error: shopError } = await supabase
     .from("barbershop_settings")
-    .select("id, name, description, logo_url, hero_background_url, slug, updated_at, is_active")
+    .select(
+      "id, name, description, logo_url, hero_background_url, slug, updated_at, is_active, whatsapp_phone",
+    )
     .eq("slug", slug)
     .eq("is_active", true)
     .maybeSingle()
@@ -37,7 +41,7 @@ export default async function PublicBookingPage({
 
   const { data: barbers } = await supabase
     .from("barbers")
-    .select("*")
+    .select("id, name, specialty")
     .eq("barbershop_id", barbershopId)
     .order("name", { ascending: true })
 
@@ -47,7 +51,9 @@ export default async function PublicBookingPage({
   const publicUrlFromPath = (path: string | null) => {
     if (!path) return ""
     if (path.startsWith("http://") || path.startsWith("https://")) return path
-    const { data } = supabase.storage.from("barbershop-assets").getPublicUrl(path)
+    const { data } = supabase.storage
+      .from("barbershop-assets")
+      .getPublicUrl(path)
     return data.publicUrl
   }
 
@@ -72,7 +78,11 @@ export default async function PublicBookingPage({
             <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary overflow-hidden">
               {logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={logoUrl} alt="Logo" className="h-full w-full object-cover" />
+                <img
+                  src={logoUrl}
+                  alt="Logo"
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 <Scissors className="h-6 w-6 text-primary-foreground" />
               )}
@@ -87,7 +97,10 @@ export default async function PublicBookingPage({
 
       <main className="relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${heroBg})` }} />
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{ backgroundImage: `url(${heroBg})` }}
+          />
           <div className="absolute inset-0 bg-black/65" />
           <div className="absolute inset-0 bg-linear-to-b from-black/40 via-transparent to-background" />
         </div>
@@ -95,12 +108,21 @@ export default async function PublicBookingPage({
         <div className="relative container mx-auto px-4 py-12">
           <div className="mx-auto max-w-4xl">
             <div className="mb-8 text-center text-white">
-              <h2 className="mb-2 text-3xl font-bold tracking-tight">Agende seu horário</h2>
-              <p className="text-white/80">Escolha o serviço, barbeiro e horário de sua preferência</p>
+              <h2 className="mb-2 text-3xl font-bold tracking-tight">
+                Agende seu horário
+              </h2>
+              <p className="text-white/80">
+                Escolha o serviço, barbeiro e horário de sua preferência
+              </p>
             </div>
 
             <div className="rounded-xl bg-white text-zinc-900 shadow-xl ring-1 ring-black/10">
-              <BookingForm services={services || []} barbers={barbers || []} barbershopId={barbershopId} />
+              <BookingForm
+                services={services || []}
+                barbers={barbers || []}
+                barbershopId={barbershopId}
+                whatsappPhone={shop.whatsapp_phone}
+              />
             </div>
           </div>
         </div>

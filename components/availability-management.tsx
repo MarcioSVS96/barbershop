@@ -2,14 +2,13 @@
 
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ChevronDown, Clock3, Plus, Save, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
 import { createClient } from "@/lib/supabase/client"
-import { Clock, Save, Plus, Trash2, CalendarDays, Lock } from "lucide-react"
 
 export type BreakItem = { start: string; end: string }
 
@@ -22,300 +21,359 @@ export interface Availability {
   breaks?: BreakItem[]
 }
 
-type UserRole = "owner" | "staff"
-
-const DAYS = [
-  { id: 0, label: "Domingo" },
-  { id: 1, label: "Segunda-feira" },
-  { id: 2, label: "Terça-feira" },
-  { id: 3, label: "Quarta-feira" },
-  { id: 4, label: "Quinta-feira" },
-  { id: 5, label: "Sexta-feira" },
-  { id: 6, label: "Sábado" },
+const days = [
+  "Domingo",
+  "Segunda-feira",
+  "Terça-feira",
+  "Quarta-feira",
+  "Quinta-feira",
+  "Sexta-feira",
+  "Sábado",
 ]
 
-interface AvailabilityManagementProps {
-  availability: Availability[]
-  barbershopId: string
-  role?: UserRole // ✅ NEW
-}
-
 export function AvailabilityManagement({
-  availability: initialAvailability,
+  availability,
   barbershopId,
   role = "owner",
-}: AvailabilityManagementProps) {
+}: {
+  availability: Availability[]
+  barbershopId: string
+  role?: "owner" | "staff"
+}) {
   const router = useRouter()
   const { toast } = useToast()
-  const supabase = useMemo(() => createClient(), [])
-
-  const [isLoading, setIsLoading] = useState(false)
-  const isReadOnly = role === "staff"
-
-  const [items, setItems] = useState(() => {
-    const initialMap = new Map(initialAvailability.map((item) => [item.day_of_week, item]))
-
-    return DAYS.map((day) => {
-      const row = initialMap.get(day.id)
-      const breaksArr = Array.isArray((row as any)?.breaks) ? ((row as any).breaks as any[]) : []
-
+  const db = useMemo(() => createClient(), [])
+  const editable = role === "owner"
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const [expandedDay, setExpandedDay] = useState<number | null>(null)
+  const [items, setItems] = useState<Availability[]>(() =>
+    [1, 2, 3, 4, 5, 6, 0].map((day) => {
+      const saved = availability.find((value) => value.day_of_week === day)
       return {
-        id: row?.id,
-        day_of_week: day.id,
-        label: day.label,
-        start_time: String(row?.start_time ?? "09:00").slice(0, 5),
-        end_time: String(row?.end_time ?? "19:00").slice(0, 5),
-        // default: new shop starts with all days disabled until configured
-        is_active: row?.is_active ?? false,
-        breaks: breaksArr as BreakItem[],
+        day_of_week: day,
+        start_time: saved?.start_time?.slice(0, 5) || "09:00",
+        end_time: saved?.end_time?.slice(0, 5) || "19:00",
+        is_active: saved?.is_active ?? false,
+        breaks: Array.isArray(saved?.breaks)
+          ? saved.breaks
+              .filter(
+                (b) =>
+                  typeof b?.start === "string" && typeof b?.end === "string",
+              )
+              .map((b) => ({
+                start: b.start.slice(0, 5),
+                end: b.end.slice(0, 5),
+              }))
+          : [],
       }
-    })
-  })
+    }),
+  )
 
-  const activeDaysCount = useMemo(() => items.filter((i) => i.is_active).length, [items])
+  const [savedSchedule, setSavedSchedule] = useState(() =>
+    JSON.stringify(items),
+  )
+  const dirty = JSON.stringify(items) !== savedSchedule
 
-  const handleUpdate = (dayId: number, field: string, value: any) => {
-    if (isReadOnly) return
-    setItems((prev) => prev.map((item) => (item.day_of_week === dayId ? { ...item, [field]: value } : item)))
-  }
-
-  const addBreak = (dayId: number) => {
-    if (isReadOnly) return
-    setItems((prev) =>
-      prev.map((item) =>
-        item.day_of_week === dayId
-          ? { ...item, breaks: [...(item.breaks || []), { start: "12:00", end: "13:00" }] }
-          : item,
+  function update(day: number, change: Partial<Availability>) {
+    setItems((previous) =>
+      previous.map((item) =>
+        item.day_of_week === day ? { ...item, ...change } : item,
       ),
     )
+    setError("")
   }
 
-  const removeBreak = (dayId: number, index: number) => {
-    if (isReadOnly) return
-    setItems((prev) =>
-      prev.map((item) =>
-        item.day_of_week === dayId ? { ...item, breaks: item.breaks?.filter((_, i) => i !== index) } : item,
-      ),
-    )
-  }
-
-  const updateBreak = (dayId: number, index: number, field: "start" | "end", value: string) => {
-    if (isReadOnly) return
-    setItems((prev) =>
-      prev.map((item) =>
-        item.day_of_week === dayId
-          ? {
-              ...item,
-              breaks: item.breaks?.map((b, i) => (i === index ? { ...b, [field]: value } : b)),
-            }
-          : item,
-      ),
-    )
-  }
-
-  const handleSave = async () => {
-    if (isReadOnly) {
-      toast({
-        title: "Sem permissão",
-        description: "Seu perfil não pode alterar o horário de funcionamento.",
-        variant: "destructive",
-      })
-      return
+  async function save() {
+    if (!editable || busy || !dirty) return
+    for (const item of items) {
+      if (!item.is_active) continue
+      const label = days[item.day_of_week]
+      if (
+        !item.start_time ||
+        !item.end_time ||
+        item.end_time <= item.start_time
+      ) {
+        setExpandedDay(item.day_of_week)
+        setError(
+          `${label}. O horário de fechamento deve ser posterior à abertura.`,
+        )
+        return
+      }
+      const pauses = [...(item.breaks || [])].sort((a, b) =>
+        a.start.localeCompare(b.start),
+      )
+      const invalid = pauses.some(
+        (b, i) =>
+          !b.start ||
+          !b.end ||
+          b.start < item.start_time ||
+          b.end > item.end_time ||
+          b.start >= b.end ||
+          (i > 0 && pauses[i - 1].end > b.start),
+      )
+      if (invalid) {
+        setExpandedDay(item.day_of_week)
+        setError(
+          `${label}. As pausas precisam ficar dentro do expediente e não podem se sobrepor.`,
+        )
+        return
+      }
     }
-
-    if (!barbershopId) {
-      toast({
-        title: "Erro de contexto",
-        description: "Barbearia não identificada (barbershopId ausente).",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsLoading(true)
+    setError("")
+    setBusy(true)
     try {
-      const updates = items.map(({ day_of_week, start_time, end_time, is_active, breaks }) => ({
-        barbershop_id: barbershopId,
-        day_of_week,
-        start_time,
-        end_time,
-        is_active,
-        breaks: Array.isArray(breaks) ? breaks : [],
-      }))
-
-      const { error } = await supabase.from("availability").upsert(updates, { onConflict: "barbershop_id,day_of_week" })
-      if (error) throw error
-
-      toast({ title: "Horários atualizados", description: "A disponibilidade foi salva com sucesso." })
+      const { error } = await db.from("availability").upsert(
+        items.map((item) => ({
+          barbershop_id: barbershopId,
+          ...item,
+          start_time: item.start_time || "09:00",
+          end_time: item.end_time || "19:00",
+        })),
+        { onConflict: "barbershop_id,day_of_week" },
+      )
+      if (error) {
+        setError("Não foi possível salvar a escala. Tente novamente.")
+        return
+      }
+      setSavedSchedule(JSON.stringify(items))
+      toast({ title: "Horários atualizados" })
       router.refresh()
-    } catch (error: any) {
-      console.error("[AvailabilityManagement] save error:", error)
-      toast({
-        title: "Erro ao salvar",
-        description: error?.message || "Não foi possível atualizar os horários.",
-        variant: "destructive",
-      })
+    } catch {
+      setError("Não foi possível salvar a escala. Tente novamente.")
     } finally {
-      setIsLoading(false)
+      setBusy(false)
     }
   }
 
   return (
-    <Card className="border-muted/60 shadow-sm overflow-hidden">
-      <CardHeader className="space-y-4 bg-gradient-to-b from-muted/10 to-transparent">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl border bg-card shadow-sm">
-                <CalendarDays className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <CardTitle className="text-lg sm:text-xl flex items-center gap-2">
-                Horários de Atendimento
-                {isReadOnly ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
-                    <Lock className="h-3 w-3" />
-                    Somente leitura
-                  </span>
-                ) : null}
-              </CardTitle>
-            </div>
-            <CardDescription>Configure os dias e horários disponíveis para agendamento</CardDescription>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 rounded-full border bg-card/70 px-3 py-2 text-sm shadow-sm">
-              <span className="text-muted-foreground">Dias ativos</span>
-              <span className="font-medium">{activeDaysCount}/7</span>
-            </div>
-
-            {!isReadOnly ? (
-              <Button onClick={handleSave} disabled={isLoading} className="w-full sm:w-auto">
-                <Save className="mr-2 h-4 w-4" />
-                {isLoading ? "Salvando..." : "Salvar"}
-              </Button>
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
+        <div>
+          <h2 className="flex items-center gap-2 font-semibold">
+            <Clock3 aria-hidden className="size-4" /> Horários da semana
+          </h2>
+          <p className="mt-1 text-xs text-slate-600">
+            {items.filter((item) => item.is_active).length} de 7 dias ativos ·
+            Horário de Recife
+          </p>
+        </div>
+        {editable ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {dirty ? (
+              <span className="text-xs text-amber-800">
+                Alterações pendentes
+              </span>
             ) : null}
-          </div>
-        </div>
-
-        <div className="sm:hidden flex items-center justify-between rounded-full border bg-card/70 px-3 py-2 text-xs shadow-sm">
-          <span className="text-muted-foreground">Dias ativos</span>
-          <span className="font-medium">{activeDaysCount}/7</span>
-        </div>
-      </CardHeader>
-
-      <CardContent className="pt-2">
-        <div className="grid gap-4 lg:grid-cols-2">
-          {items.map((item) => (
-            <div
-              key={item.day_of_week}
-              className={[
-                "group rounded-2xl border p-4 shadow-sm transition-all",
-                item.is_active
-                  ? "bg-gradient-to-br from-card to-muted/20 hover:shadow-md"
-                  : "bg-muted/10 opacity-80 hover:opacity-100",
-              ].join(" ")}
+            <Button
+              type="button"
+              onClick={save}
+              disabled={busy || !dirty}
+              className="bg-[#16243b] text-white hover:bg-[#253753]"
             >
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center justify-between gap-3 sm:justify-start">
-                  <div className="flex items-center gap-3">
-                    <Switch
-                      checked={item.is_active}
-                      onCheckedChange={(checked) => handleUpdate(item.day_of_week, "is_active", checked)}
-                      disabled={isReadOnly}
-                    />
-                    <div className="leading-tight">
-                      <Label className={item.is_active ? "font-semibold" : "text-muted-foreground"}>{item.label}</Label>
-                      <p className="text-xs text-muted-foreground">{item.is_active ? "Aberto para agendamentos" : "Fechado"}</p>
-                    </div>
+              <Save aria-hidden /> {busy ? "Salvando…" : "Salvar horários"}
+            </Button>
+          </div>
+        ) : null}
+      </header>
+      {error ? (
+        <p
+          role="alert"
+          className="mx-4 mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-800"
+        >
+          {error}
+        </p>
+      ) : null}
+      <div className="divide-y divide-slate-100">
+        {items.map((item) => {
+          const day = item.day_of_week
+          const pauses = item.breaks || []
+          const expanded = item.is_active && expandedDay === day
+          return (
+            <div key={day} className="space-y-3 px-4 py-4 sm:px-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <Switch
+                    id={`day-${day}`}
+                    checked={item.is_active}
+                    disabled={!editable || busy}
+                    onCheckedChange={(is_active) => {
+                      update(day, { is_active })
+                      if (is_active) setExpandedDay(day)
+                      else if (expandedDay === day) setExpandedDay(null)
+                    }}
+                  />
+                  <div>
+                    <Label htmlFor={`day-${day}`} className="font-semibold">
+                      {days[day]}
+                    </Label>
+                    <p className="mt-1 text-xs text-slate-600">
+                      {item.is_active
+                        ? `${item.start_time}–${item.end_time} · ${pauses.length === 1 ? "1 pausa" : `${pauses.length} pausas`}`
+                        : "Fechado"}
+                    </p>
                   </div>
                 </div>
-
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                  <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
-                    <Clock className="h-4 w-4" />
-                    <span>Atendimento</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="time"
-                      value={item.start_time}
-                      onChange={(e) => handleUpdate(item.day_of_week, "start_time", e.target.value)}
-                      disabled={!item.is_active || isReadOnly}
-                      className="h-9 w-27.5 bg-background/80"
+                {item.is_active ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-expanded={expanded}
+                    aria-controls={`schedule-${day}`}
+                    onClick={() => setExpandedDay(expanded ? null : day)}
+                  >
+                    {expanded
+                      ? "Recolher"
+                      : editable
+                        ? "Editar horários"
+                        : "Ver horários"}
+                    <ChevronDown
+                      aria-hidden
+                      className={expanded ? "rotate-180" : undefined}
                     />
-                    <span className="text-xs text-muted-foreground">até</span>
-                    <Input
-                      type="time"
-                      value={item.end_time}
-                      onChange={(e) => handleUpdate(item.day_of_week, "end_time", e.target.value)}
-                      disabled={!item.is_active || isReadOnly}
-                      className="h-9 w-27.5 bg-background/80"
-                    />
-                  </div>
-                </div>
+                  </Button>
+                ) : null}
               </div>
-
-              {item.is_active && (
-                <div className="mt-4 border-t/70 pt-4">
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-medium">Intervalos (pausas)</Label>
-                      {!isReadOnly ? (
-                        <Button variant="outline" size="sm" className="h-8" onClick={() => addBreak(item.day_of_week)}>
-                          <Plus className="mr-2 h-3 w-3" /> Adicionar
+              {expanded ? (
+                <div
+                  id={`schedule-${day}`}
+                  className="space-y-3 rounded-lg bg-slate-50 p-3"
+                >
+                  <div className="grid w-full max-w-64 grid-cols-2 gap-2">
+                    <Input
+                      type="time"
+                      aria-label={`Abertura de ${days[day]}`}
+                      value={item.start_time}
+                      disabled={!editable || busy}
+                      onChange={(event) =>
+                        update(day, { start_time: event.target.value })
+                      }
+                    />
+                    <Input
+                      type="time"
+                      aria-label={`Fechamento de ${days[day]}`}
+                      value={item.end_time}
+                      disabled={!editable || busy}
+                      onChange={(event) =>
+                        update(day, { end_time: event.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-slate-700">
+                      {pauses.length ? "Pausas" : "Sem pausas"}
+                    </p>
+                    {editable ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          disabled={busy}
+                          onClick={() =>
+                            update(day, {
+                              breaks: [
+                                ...pauses,
+                                { start: "12:00", end: "13:00" },
+                              ],
+                            })
+                          }
+                        >
+                          <Plus aria-hidden /> Adicionar pausa
+                        </Button>
+                        <select
+                          aria-label={`Copiar horários de ${days[day]}`}
+                          value=""
+                          disabled={busy}
+                          className="h-8 max-w-full rounded-md border border-slate-200 bg-white px-2 text-xs"
+                          onChange={(event) => {
+                            if (event.target.value === "") return
+                            update(Number(event.target.value), {
+                              is_active: true,
+                              start_time: item.start_time,
+                              end_time: item.end_time,
+                              breaks: pauses.map((b) => ({ ...b })),
+                            })
+                            setExpandedDay(Number(event.target.value))
+                          }}
+                        >
+                          <option value="" disabled>
+                            Copiar para…
+                          </option>
+                          {items
+                            .filter((target) => target.day_of_week !== day)
+                            .map((target) => (
+                              <option
+                                key={target.day_of_week}
+                                value={target.day_of_week}
+                              >
+                                {days[target.day_of_week]}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    ) : null}
+                  </div>
+                  {pauses.map((pause, index) => (
+                    <div
+                      key={index}
+                      className="grid max-w-80 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2"
+                    >
+                      <Input
+                        type="time"
+                        aria-label={`Início da pausa ${index + 1} de ${days[day]}`}
+                        value={pause.start}
+                        disabled={!editable || busy}
+                        onChange={(event) =>
+                          update(day, {
+                            breaks: pauses.map((b, i) =>
+                              i === index
+                                ? { ...b, start: event.target.value }
+                                : b,
+                            ),
+                          })
+                        }
+                      />
+                      <Input
+                        type="time"
+                        aria-label={`Fim da pausa ${index + 1} de ${days[day]}`}
+                        value={pause.end}
+                        disabled={!editable || busy}
+                        onChange={(event) =>
+                          update(day, {
+                            breaks: pauses.map((b, i) =>
+                              i === index
+                                ? { ...b, end: event.target.value }
+                                : b,
+                            ),
+                          })
+                        }
+                      />
+                      {editable ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Remover pausa"
+                          disabled={busy}
+                          onClick={() =>
+                            update(day, {
+                              breaks: pauses.filter((_, i) => i !== index),
+                            })
+                          }
+                        >
+                          <Trash2 aria-hidden />
                         </Button>
                       ) : null}
                     </div>
-
-                    {item.breaks?.length === 0 ? (
-                      <div className="rounded-lg border bg-muted/20 p-3 text-xs text-muted-foreground">
-                        Nenhum intervalo configurado.
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {item.breaks?.map((brk, idx: number) => (
-                          <div key={idx} className="flex items-center justify-between gap-3 rounded-xl border bg-background/70 p-3">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <Input
-                                type="time"
-                                value={String(brk.start).slice(0, 5)}
-                                onChange={(e) => updateBreak(item.day_of_week, idx, "start", e.target.value)}
-                                className="h-9 w-27.5 bg-background/80"
-                                disabled={isReadOnly}
-                              />
-                              <span className="text-xs text-muted-foreground">até</span>
-                              <Input
-                                type="time"
-                                value={String(brk.end).slice(0, 5)}
-                                onChange={(e) => updateBreak(item.day_of_week, idx, "end", e.target.value)}
-                                className="h-9 w-27.5 bg-background/80"
-                                disabled={isReadOnly}
-                              />
-                            </div>
-
-                            {!isReadOnly ? (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-9 w-9 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                onClick={() => removeBreak(item.day_of_week, idx)}
-                                aria-label="Remover intervalo"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            ) : null}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  ))}
                 </div>
-              )}
+              ) : null}
             </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+          )
+        })}
+      </div>
+    </section>
   )
 }

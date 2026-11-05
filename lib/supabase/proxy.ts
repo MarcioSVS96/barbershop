@@ -1,12 +1,8 @@
-import { createServerClient } from "@supabase/ssr"
+import { createServerClient, type SetAllCookies } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function updateSession(request: NextRequest) {
-  const response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  })
+  const pendingCookies: Parameters<SetAllCookies>[0] = []
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -17,10 +13,10 @@ export async function updateSession(request: NextRequest) {
         return request.cookies.getAll()
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
+        cookiesToSet.forEach(({ name, value }) => {
           request.cookies.set(name, value)
-          response.cookies.set(name, value, options)
         })
+        pendingCookies.push(...cookiesToSet)
       },
     },
   })
@@ -32,11 +28,22 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const isDashboard = pathname === "/barbeiro" || pathname.endsWith("/barbeiro")
 
+  let response: NextResponse
   if (isDashboard && !user) {
     const url = request.nextUrl.clone()
     url.pathname = "/auth/login"
     url.searchParams.set("reason", "proxy_no_user")
-    return NextResponse.redirect(url)
+    response = NextResponse.redirect(url)
+  } else {
+    // Forward the request headers after Supabase has refreshed the cookies.
+    response = NextResponse.next({ request })
+  }
+
+  pendingCookies.forEach(({ name, value, options }) => {
+    response.cookies.set(name, value, options)
+  })
+  if (pendingCookies.length > 0) {
+    response.headers.set("Cache-Control", "private, no-store")
   }
 
   return response
