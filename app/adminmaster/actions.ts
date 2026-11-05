@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { requireMasterAdmin } from "@/lib/admin/master"
+import { findMasterAdmin } from "@/lib/auth/panel"
 import { deleteAccount, type DeleteAccountState } from "@/lib/admin/accounts"
 
 function toString(value: FormDataEntryValue | null) {
@@ -347,6 +348,20 @@ export async function updateBarbershopUser(formData: FormData) {
     redirect("/adminmaster?tab=perfis&msg=invalid_role")
   }
 
+  const [master, member] = await Promise.all([
+    findMasterAdmin(admin, userId),
+    admin
+      .from("barbershop_members")
+      .select("barber_id, barbershop_id")
+      .eq("user_id", userId)
+      .eq("barbershop_id", currentBarbershopId)
+      .maybeSingle(),
+  ])
+  if (master.error || master.data || member.error || !member.data) {
+    redirect("/adminmaster?tab=perfis&msg=profile_update_not_found")
+  }
+  const memberRow = member.data
+
   const updatePayload: { email: string; password?: string } = { email }
   if (password) updatePayload.password = password
 
@@ -364,17 +379,6 @@ export async function updateBarbershopUser(formData: FormData) {
       redirect("/adminmaster?tab=perfis&msg=email_exists")
     }
     throw new Error(authError.message)
-  }
-
-  const { data: memberRow, error: memberRowErr } = await admin
-    .from("barbershop_members")
-    .select("barber_id, barbershop_id")
-    .eq("user_id", userId)
-    .eq("barbershop_id", currentBarbershopId)
-    .maybeSingle()
-
-  if (memberRowErr || !memberRow) {
-    redirect("/adminmaster?tab=perfis&msg=profile_update_not_found")
   }
 
   let nextBarberId = memberRow.barber_id

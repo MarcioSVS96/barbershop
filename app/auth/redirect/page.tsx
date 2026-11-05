@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { findLoginPanel } from "@/lib/auth/panel"
 import { createClient } from "@/lib/supabase/server"
 
 export default async function AuthRedirectPage() {
@@ -13,19 +14,6 @@ export default async function AuthRedirectPage() {
     redirect("/auth/login?reason=redirect_no_user")
   }
 
-  const { data: masterRow, error: masterError } = await supabase
-    .from("master_admins")
-    .select("id")
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (masterError) {
-    redirect("/auth/login?reason=redirect_master_error")
-  }
-
-  if (masterRow) {
-    redirect("/adminmaster")
-  }
-
-  redirect("/barbeiro")
+  const destination = await findLoginPanel(supabase, user.id)
+  redirect(destination ?? "/auth/login")
 }

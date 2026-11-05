@@ -71,7 +71,7 @@ type OpenPanel =
   | { type: "details" | "move" | "receipt"; id: string }
 type Props = {
   shop: BarbershopSettings & { slug: string }
-  role: "owner" | "staff"
+  canManageShop: boolean
   barberId: string | null
   logoUrl: string
   appointments: Appointment[]
@@ -221,7 +221,7 @@ function BookingRows({
 
 export function BarberWorkspace({
   shop,
-  role,
+  canManageShop,
   barberId,
   logoUrl,
   appointments,
@@ -236,7 +236,7 @@ export function BarberWorkspace({
   const router = useRouter()
   const [section, setSection] = useState<Section>("today")
   const [setup, setSetup] = useState<Setup>(
-    role === "owner" ? "services" : "team",
+    canManageShop ? "services" : "team",
   )
   const [date, setDate] = useState(shopDate)
   const [week, setWeek] = useState(false)
@@ -246,7 +246,7 @@ export function BarberWorkspace({
   const [actionError, setActionError] = useState("")
   const [busy, setBusy] = useState(false)
   const [confirm, setConfirm] = useState<"cancelled" | "no_show">()
-  const owner = role === "owner"
+  const owner = canManageShop
   const today = shopDate()
   const now = shopTime()
   const pageUrl = `/${shop.slug}`
@@ -853,21 +853,21 @@ export function BarberWorkspace({
                   <ServiceManagement
                     barbershopId={shop.id}
                     services={services}
-                    role={role}
+                    canManageShop={canManageShop}
                   />
                 ) : null}
                 {owner && setup === "hours" ? (
                   <AvailabilityManagement
                     barbershopId={shop.id}
                     availability={availability}
-                    role={role}
+                    canManageShop={canManageShop}
                   />
                 ) : null}
                 {!owner || setup === "team" ? (
                   <ProfileManagement
                     barbershopId={shop.id}
                     barbers={barbers}
-                    role={role}
+                    canManageShop={canManageShop}
                     myBarberId={barberId}
                   />
                 ) : null}

@@ -17,11 +17,11 @@ import { BarberSheet, FormError, primaryClass } from "./barber/forms"
 export function ServiceManagement({
   services: initialServices,
   barbershopId,
-  role = "owner",
+  canManageShop,
 }: {
   services: Service[]
   barbershopId: string
-  role?: "owner" | "staff"
+  canManageShop: boolean
 }) {
   const router = useRouter()
   const { toast } = useToast()
@@ -30,7 +30,7 @@ export function ServiceManagement({
   const [editor, setEditor] = useState<Service | null>()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
-  const owner = role === "owner"
+  const owner = canManageShop
   const active = services.filter((service) => service.is_active).length
 
   useEffect(() => setServices(initialServices), [initialServices])
