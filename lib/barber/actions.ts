@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { normalizePhone, shopDate, shopTime } from "./time"
+import { expenseCategories } from "./expenses"
 
 const uuid = z.string().uuid()
 const date = z
@@ -336,5 +337,92 @@ export async function recordBookingReceipt(input: unknown) {
       "Confira se o atendimento foi concluído e está disponível para recebimento.",
     )
   refresh(member.slug)
+  return { ok: true as const }
+}
+
+export async function createCashExpense(input: unknown) {
+  const parsed = z
+    .object({
+      id: uuid,
+      shopId: uuid,
+      description: z.string().trim().min(2).max(120),
+      category: z.enum(expenseCategories),
+      amount: z
+        .number()
+        .finite()
+        .min(0.01)
+        .max(999999.99)
+        .refine(
+          (value) => Math.abs(value * 100 - Math.round(value * 100)) < 0.00001,
+        ),
+      paidOn: date.refine((value) => value <= shopDate()),
+    })
+    .safeParse(input)
+  if (!parsed.success)
+    return failure("Confira a descrição, o valor e a data do pagamento.")
+
+  const { id, shopId, description, category, amount, paidOn } = parsed.data
+  const member = await memberOf(shopId)
+  if (!member || member.role !== "owner")
+    return failure("Somente o responsável pode registrar despesas.")
+
+  const { error } = await member.db.from("cash_expenses").insert({
+    id,
+    barbershop_id: shopId,
+    description,
+    category,
+    amount,
+    paid_on: paidOn,
+  })
+  if (error?.code === "23505") {
+    // A retry after a dropped response should find the same entry, not add it again.
+    const { data } = await member.db
+      .from("cash_expenses")
+      .select("description, category, amount, paid_on, voided_at")
+      .eq("barbershop_id", shopId)
+      .eq("id", id)
+      .maybeSingle()
+    if (
+      !data ||
+      data.voided_at ||
+      data.description !== description ||
+      data.category !== category ||
+      Number(data.amount) !== amount ||
+      data.paid_on !== paidOn
+    ) {
+      return failure(
+        "Confira os lançamentos do caixa antes de tentar novamente.",
+      )
+    }
+  } else if (error) {
+    return failure("Não foi possível registrar a despesa. Tente novamente.")
+  }
+
+  revalidatePath(`/${member.slug}/barbeiro`)
+  return { ok: true as const }
+}
+
+export async function voidCashExpense(input: unknown) {
+  const parsed = z.object({ shopId: uuid, id: uuid }).safeParse(input)
+  if (!parsed.success) return failure("Despesa inválida.")
+
+  const { shopId, id } = parsed.data
+  const member = await memberOf(shopId)
+  if (!member || member.role !== "owner")
+    return failure("Somente o responsável pode cancelar despesas.")
+
+  const { data, error } = await member.db
+    .from("cash_expenses")
+    .update({ voided_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("barbershop_id", shopId)
+    .is("voided_at", null)
+    .select("id")
+    .maybeSingle()
+  if (error) return failure("Não foi possível cancelar a despesa.")
+  if (!data)
+    return failure("A despesa já foi cancelada ou não está disponível.")
+
+  revalidatePath(`/${member.slug}/barbeiro`)
   return { ok: true as const }
 }

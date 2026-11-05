@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Clock3, Plus, Save, Trash2 } from "lucide-react"
+import { ChevronDown, Clock3, Plus, Save, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -46,6 +46,7 @@ export function AvailabilityManagement({
   const editable = role === "owner"
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
+  const [expandedDay, setExpandedDay] = useState<number | null>(null)
   const [items, setItems] = useState<Availability[]>(() =>
     [1, 2, 3, 4, 5, 6, 0].map((day) => {
       const saved = availability.find((value) => value.day_of_week === day)
@@ -69,6 +70,11 @@ export function AvailabilityManagement({
     }),
   )
 
+  const [savedSchedule, setSavedSchedule] = useState(() =>
+    JSON.stringify(items),
+  )
+  const dirty = JSON.stringify(items) !== savedSchedule
+
   function update(day: number, change: Partial<Availability>) {
     setItems((previous) =>
       previous.map((item) =>
@@ -79,7 +85,7 @@ export function AvailabilityManagement({
   }
 
   async function save() {
-    if (!editable || busy) return
+    if (!editable || busy || !dirty) return
     for (const item of items) {
       if (!item.is_active) continue
       const label = days[item.day_of_week]
@@ -88,6 +94,7 @@ export function AvailabilityManagement({
         !item.end_time ||
         item.end_time <= item.start_time
       ) {
+        setExpandedDay(item.day_of_week)
         setError(
           `${label}. O horário de fechamento deve ser posterior à abertura.`,
         )
@@ -106,6 +113,7 @@ export function AvailabilityManagement({
           (i > 0 && pauses[i - 1].end > b.start),
       )
       if (invalid) {
+        setExpandedDay(item.day_of_week)
         setError(
           `${label}. As pausas precisam ficar dentro do expediente e não podem se sobrepor.`,
         )
@@ -128,6 +136,7 @@ export function AvailabilityManagement({
         setError("Não foi possível salvar a escala. Tente novamente.")
         return
       }
+      setSavedSchedule(JSON.stringify(items))
       toast({ title: "Horários atualizados" })
       router.refresh()
     } catch {
@@ -150,9 +159,21 @@ export function AvailabilityManagement({
           </p>
         </div>
         {editable ? (
-          <Button type="button" onClick={save} disabled={busy}>
-            <Save aria-hidden /> {busy ? "Salvando…" : "Salvar horários"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {dirty ? (
+              <span className="text-xs text-amber-800">
+                Alterações pendentes
+              </span>
+            ) : null}
+            <Button
+              type="button"
+              onClick={save}
+              disabled={busy || !dirty}
+              className="bg-[#16243b] text-white hover:bg-[#253753]"
+            >
+              <Save aria-hidden /> {busy ? "Salvando…" : "Salvar horários"}
+            </Button>
+          </div>
         ) : null}
       </header>
       {error ? (
@@ -167,6 +188,7 @@ export function AvailabilityManagement({
         {items.map((item) => {
           const day = item.day_of_week
           const pauses = item.breaks || []
+          const expanded = item.is_active && expandedDay === day
           return (
             <div key={day} className="space-y-3 px-4 py-4 sm:px-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -175,19 +197,50 @@ export function AvailabilityManagement({
                     id={`day-${day}`}
                     checked={item.is_active}
                     disabled={!editable || busy}
-                    onCheckedChange={(is_active) => update(day, { is_active })}
+                    onCheckedChange={(is_active) => {
+                      update(day, { is_active })
+                      if (is_active) setExpandedDay(day)
+                      else if (expandedDay === day) setExpandedDay(null)
+                    }}
                   />
                   <div>
                     <Label htmlFor={`day-${day}`} className="font-semibold">
                       {days[day]}
                     </Label>
                     <p className="mt-1 text-xs text-slate-600">
-                      {item.is_active ? "Aberto" : "Fechado"}
+                      {item.is_active
+                        ? `${item.start_time}–${item.end_time} · ${pauses.length === 1 ? "1 pausa" : `${pauses.length} pausas`}`
+                        : "Fechado"}
                     </p>
                   </div>
                 </div>
                 {item.is_active ? (
-                  <div className="grid w-full max-w-64 grid-cols-2 gap-2 sm:w-auto">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-expanded={expanded}
+                    aria-controls={`schedule-${day}`}
+                    onClick={() => setExpandedDay(expanded ? null : day)}
+                  >
+                    {expanded
+                      ? "Recolher"
+                      : editable
+                        ? "Editar horários"
+                        : "Ver horários"}
+                    <ChevronDown
+                      aria-hidden
+                      className={expanded ? "rotate-180" : undefined}
+                    />
+                  </Button>
+                ) : null}
+              </div>
+              {expanded ? (
+                <div
+                  id={`schedule-${day}`}
+                  className="space-y-3 rounded-lg bg-slate-50 p-3"
+                >
+                  <div className="grid w-full max-w-64 grid-cols-2 gap-2">
                     <Input
                       type="time"
                       aria-label={`Abertura de ${days[day]}`}
@@ -207,10 +260,6 @@ export function AvailabilityManagement({
                       }
                     />
                   </div>
-                ) : null}
-              </div>
-              {item.is_active ? (
-                <div className="space-y-2 rounded-lg bg-slate-50 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-xs font-medium text-slate-700">
                       {pauses.length ? "Pausas" : "Sem pausas"}
@@ -246,6 +295,7 @@ export function AvailabilityManagement({
                               end_time: item.end_time,
                               breaks: pauses.map((b) => ({ ...b })),
                             })
+                            setExpandedDay(Number(event.target.value))
                           }}
                         >
                           <option value="" disabled>

@@ -1,5 +1,8 @@
 "use client"
 
+import type { CashExpense } from "@/lib/barber/expenses"
+import { CashView } from "./cash-view"
+import { PublicPageSettings } from "./public-page-settings"
 import { useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import {
@@ -17,6 +20,9 @@ import {
   MessageCircle,
   LayoutDashboard,
   CheckCircle2,
+  BriefcaseBusiness,
+  Users,
+  Globe,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -70,6 +76,7 @@ type Props = {
   logoUrl: string
   appointments: Appointment[]
   payments: Payment[]
+  expenses: CashExpense[]
   barbers: Barber[]
   services: Service[]
   availability: Availability[]
@@ -91,7 +98,6 @@ const statusStyles: Record<Appointment["status"], string> = {
   cancelled: "bg-slate-100 text-slate-700 ring-slate-200",
   no_show: "bg-rose-50 text-rose-900 ring-rose-200",
 }
-const methods = { pix: "Pix", card: "Cartão", cash: "Dinheiro" }
 const sources = {
   site: "Site",
   whatsapp: "WhatsApp",
@@ -220,6 +226,7 @@ export function BarberWorkspace({
   logoUrl,
   appointments,
   payments,
+  expenses,
   barbers,
   services,
   availability,
@@ -234,7 +241,6 @@ export function BarberWorkspace({
   const [date, setDate] = useState(shopDate)
   const [week, setWeek] = useState(false)
   const [professional, setProfessional] = useState("")
-  const [period, setPeriod] = useState<"day" | "week" | "month">("day")
   const [open, setOpen] = useState<OpenPanel>()
   const [message, setMessage] = useState("")
   const [actionError, setActionError] = useState("")
@@ -276,24 +282,6 @@ export function BarberWorkspace({
       !paidIds.has(a.id) &&
       (!professional || a.barber_id === professional),
   )
-  const cashStart =
-    period === "month"
-      ? `${today.slice(0, 7)}-01`
-      : period === "week"
-        ? shiftDate(
-            today,
-            -((new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7),
-          )
-        : today
-  const cashPayments = payments.filter((p) => {
-    if (
-      !p.payment_date ||
-      (professional && p.appointments?.barber_id !== professional)
-    )
-      return false
-    const received = shopDate(new Date(p.payment_date))
-    return received >= cashStart && received <= today
-  })
   const receivedToday = payments.reduce(
     (sum, p) =>
       sum +
@@ -392,7 +380,7 @@ export function BarberWorkspace({
     <Button
       className={primaryClass}
       onClick={() => setOpen({ type: "new" })}
-      disabled={!canBook || failedSections.length > 0}
+      disabled={!canBook}
     >
       <Plus aria-hidden /> Novo agendamento
     </Button>
@@ -630,7 +618,6 @@ export function BarberWorkspace({
                   </button>
                   <button
                     onClick={() => {
-                      setPeriod("day")
                       setProfessional("")
                       setSection("cash")
                     }}
@@ -787,120 +774,18 @@ export function BarberWorkspace({
           ) : null}
 
           {section === "cash" ? (
-            <>
-              <div className="flex flex-wrap items-center gap-2">
-                <select
-                  aria-label="Período do caixa"
-                  className={`${fieldClass} sm:w-44`}
-                  value={period}
-                  onChange={(event) =>
-                    setPeriod(event.target.value as typeof period)
-                  }
-                >
-                  <option value="day">Hoje</option>
-                  <option value="week">Esta semana</option>
-                  <option value="month">Este mês</option>
-                </select>
-                {professionalFilter}
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className={`${panelClass} space-y-2 p-5`}>
-                  <p className="text-sm text-slate-600">
-                    {period === "month"
-                      ? "Recebimentos mensais"
-                      : "Recebido no período"}
-                  </p>
-                  <p className="text-2xl font-semibold tabular-nums">
-                    {money(
-                      cashPayments.reduce(
-                        (sum, p) => sum + Number(p.amount),
-                        0,
-                      ),
-                    )}
-                  </p>
-                </div>
-                <div className={`${panelClass} space-y-2 p-5`}>
-                  <p className="text-sm text-slate-600">
-                    Atendimentos a receber
-                  </p>
-                  <p className="text-2xl font-semibold tabular-nums">
-                    {unpaid.length}
-                  </p>
-                </div>
-              </div>
-              {unpaid.length ? (
-                <section className={panelClass}>
-                  <h2 className="border-b border-slate-200 p-4 font-semibold sm:px-5">
-                    Concluídos a receber
-                  </h2>
-                  <ul className="divide-y divide-slate-100">
-                    {unpaid.map((a) => (
-                      <li
-                        key={a.id}
-                        className="flex flex-wrap items-center justify-between gap-2 p-4 sm:px-5"
-                      >
-                        <div>
-                          <p className="text-sm font-semibold">
-                            {a.clients?.name || "Cliente"}
-                          </p>
-                          <p className="text-xs text-slate-600">
-                            {displayDate(a.appointment_date)} ·{" "}
-                            {a.services?.name || "Serviço"} ·{" "}
-                            {money(a.service_price_at_booking)}
-                          </p>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setOpen({ type: "receipt", id: a.id })}
-                        >
-                          Registrar recebimento
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-              <section className={panelClass}>
-                <h2 className="border-b border-slate-200 p-4 font-semibold sm:px-5">
-                  Recebimentos registrados
-                </h2>
-                {cashPayments.length ? (
-                  <ul className="divide-y divide-slate-100">
-                    {cashPayments.map((p) => {
-                      const a = appointments.find(
-                        (a) => a.id === p.appointment_id,
-                      )
-                      return (
-                        <li
-                          key={p.id}
-                          className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5"
-                        >
-                          <div className="min-w-0">
-                            <p className="break-words text-sm font-medium">
-                              {a?.clients?.name || "Atendimento"}
-                            </p>
-                            <p className="text-xs text-slate-600">
-                              {displayDate(shopDate(new Date(p.payment_date)))}{" "}
-                              · {methods[p.payment_method] || p.payment_method}
-                              {a?.barbers?.name ? ` · ${a.barbers.name}` : ""}
-                            </p>
-                          </div>
-                          <span className="shrink-0 text-sm font-semibold tabular-nums">
-                            {money(p.amount)}
-                          </span>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                ) : (
-                  <Empty
-                    title="Sem recebimentos no período"
-                    detail="Conclua um atendimento e registre o valor recebido para lançar no caixa."
-                  />
-                )}
-              </section>
-            </>
+            <CashView
+              shopId={shop.id}
+              shopTotals={owner && !professional}
+              professional={professional}
+              professionalFilter={professionalFilter}
+              payments={payments}
+              expenses={expenses}
+              unpaid={unpaid}
+              appointments={appointments}
+              loadErrors={failedSections}
+              recordReceipt={(id) => setOpen({ type: "receipt", id })}
+            />
           ) : null}
 
           {section === "settings" ? (
@@ -908,24 +793,58 @@ export function BarberWorkspace({
               {owner ? (
                 <nav
                   aria-label="Configurações da barbearia"
-                  className="flex flex-wrap gap-2"
+                  className="grid grid-cols-2 gap-2 lg:grid-cols-4"
                 >
                   {(
                     [
-                      ["services", "Serviços"],
-                      ["hours", "Horários"],
-                      ["team", "Equipe"],
-                      ["page", "Página de agendamento"],
+                      {
+                        value: "services",
+                        label: "Serviços",
+                        detail: "Catálogo e preços",
+                        Icon: BriefcaseBusiness,
+                      },
+                      {
+                        value: "hours",
+                        label: "Horários",
+                        detail: "Expediente e pausas",
+                        Icon: Clock3,
+                      },
+                      {
+                        value: "team",
+                        label: "Equipe",
+                        detail: "Profissionais",
+                        Icon: Users,
+                      },
+                      {
+                        value: "page",
+                        label: "Página pública",
+                        detail: "Marca e contato",
+                        Icon: Globe,
+                      },
                     ] as const
-                  ).map(([value, label]) => (
-                    <Button
+                  ).map(({ value, label, detail, Icon }) => (
+                    <button
                       key={value}
-                      variant={setup === value ? "default" : "outline"}
+                      type="button"
                       aria-pressed={setup === value}
                       onClick={() => setSetup(value)}
+                      className={`flex min-w-0 cursor-pointer items-start gap-2 rounded-xl border px-3 py-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700 sm:items-center sm:gap-3 sm:px-4 ${setup === value ? "border-[#16243b] bg-[#16243b] text-white" : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50"}`}
                     >
-                      {label}
-                    </Button>
+                      <Icon
+                        aria-hidden
+                        className="mt-0.5 size-4 shrink-0 sm:mt-0"
+                      />
+                      <span className="min-w-0">
+                        <span className="block break-words text-sm font-semibold">
+                          {label}
+                        </span>
+                        <span
+                          className={`mt-0.5 block text-xs ${setup === value ? "text-slate-200" : "text-slate-600"}`}
+                        >
+                          {detail}
+                        </span>
+                      </span>
+                    </button>
                   ))}
                 </nav>
               ) : null}
@@ -944,16 +863,16 @@ export function BarberWorkspace({
                     role={role}
                   />
                 ) : null}
-                {!owner || setup === "team" || setup === "page" ? (
+                {!owner || setup === "team" ? (
                   <ProfileManagement
-                    key={setup}
                     barbershopId={shop.id}
-                    settings={shop}
                     barbers={barbers}
                     role={role}
                     myBarberId={barberId}
-                    section={owner && setup === "page" ? "page" : "team"}
                   />
+                ) : null}
+                {owner && setup === "page" ? (
+                  <PublicPageSettings shop={shop} />
                 ) : null}
               </div>
             </>

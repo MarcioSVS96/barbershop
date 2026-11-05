@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
+import type { CashExpense } from "@/lib/barber/expenses"
 import { BarberWorkspace } from "@/components/barber/workspace"
 import type { Availability } from "@/components/availability-management"
 import type {
@@ -88,7 +89,7 @@ export default async function DashboardPage({
     .eq("barbershop_id", shop.id)
     .order("name")
 
-  const [appointments, payments, barbers, services, hours, blocks] =
+  const [appointments, payments, barbers, services, hours, blocks, expenses] =
     await Promise.all([
       allRows((from, to) =>
         (staff ? apptQuery.eq("barber_id", barberId!) : apptQuery).range(
@@ -122,6 +123,19 @@ export default async function DashboardPage({
           .order("id")
           .range(from, to),
       ),
+      staff
+        ? Promise.resolve({ data: [], error: null })
+        : allRows((from, to) =>
+            db
+              .from("cash_expenses")
+              .select(
+                "id, description, category, amount, paid_on, created_at, voided_at",
+              )
+              .eq("barbershop_id", shop.id)
+              .order("paid_on", { ascending: false })
+              .order("id")
+              .range(from, to),
+          ),
     ])
   const failedSections = [
     appointments.error && "agendamentos",
@@ -130,6 +144,7 @@ export default async function DashboardPage({
     services.error && "serviços",
     hours.error && "horários",
     blocks.error && "bloqueios",
+    expenses.error && "despesas",
   ].filter(Boolean) as string[]
   if (failedSections.length)
     console.error("[barbeiro] failed to load", failedSections)
@@ -156,6 +171,7 @@ export default async function DashboardPage({
       services={(services.data || []) as Service[]}
       availability={(hours.data || []) as Availability[]}
       blocks={blocks.data as BookingBlock[]}
+      expenses={expenses.data as CashExpense[]}
       failedSections={failedSections}
     />
   )
