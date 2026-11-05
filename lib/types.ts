@@ -33,10 +33,11 @@ export interface Appointment {
   service_id: string
   appointment_date: string
   appointment_time: string
-  status: "pending" | "confirmed" | "completed" | "cancelled"
+  status: "pending" | "confirmed" | "completed" | "cancelled" | "no_show"
   notes: string | null
   service_price_at_booking: number
-  service_duration_at_booking: number
+  service_duration_at_booking: number | null
+  booking_source?: "site" | "whatsapp" | "balcao" | "telefone"
   created_at: string
   clients?: Client
   barbers?: Barber
@@ -60,8 +61,18 @@ export interface BarbershopSettings {
   name: string
   description: string | null
   slug?: string | null
+  whatsapp_phone?: string | null
   logo_url: string | null
   hero_background_url: string | null
   updated_at: string
   is_active?: boolean | null
+}
+
+export interface BookingBlock {
+  id: string
+  barber_id: string | null
+  block_date: string
+  start_time: string
+  end_time: string
+  reason: string | null
 }

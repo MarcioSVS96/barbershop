@@ -4,18 +4,32 @@ import type React from "react"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
 
 import { useToast } from "@/hooks/use-toast"
 import { createClient } from "@/lib/supabase/client"
-import { Plus, Edit, Clock, DollarSign, Trash2, Lock } from "lucide-react"
+import { Plus, Edit, Clock, Lock } from "lucide-react"
+import { money } from "@/lib/barber/time"
 import type { Service } from "@/lib/types"
 
 type UserRole = "owner" | "staff"
@@ -67,7 +81,11 @@ export function ServiceManagement({
 
   const openCreateDialog = () => {
     if (isReadOnly) {
-      toast({ title: "Sem permissão", description: "Seu perfil não pode criar serviços.", variant: "destructive" })
+      toast({
+        title: "Sem permissão",
+        description: "Seu perfil não pode criar serviços.",
+        variant: "destructive",
+      })
       return
     }
     resetForm()
@@ -76,7 +94,11 @@ export function ServiceManagement({
 
   const openEditDialog = (service: Service) => {
     if (isReadOnly) {
-      toast({ title: "Sem permissão", description: "Seu perfil não pode editar serviços.", variant: "destructive" })
+      toast({
+        title: "Sem permissão",
+        description: "Seu perfil não pode editar serviços.",
+        variant: "destructive",
+      })
       return
     }
     setEditingService(service)
@@ -91,7 +113,11 @@ export function ServiceManagement({
     e.preventDefault()
 
     if (isReadOnly) {
-      toast({ title: "Sem permissão", description: "Seu perfil não pode alterar serviços.", variant: "destructive" })
+      toast({
+        title: "Sem permissão",
+        description: "Seu perfil não pode alterar serviços.",
+        variant: "destructive",
+      })
       return
     }
 
@@ -105,20 +131,36 @@ export function ServiceManagement({
     }
 
     if (!name.trim()) {
-      toast({ title: "Nome obrigatório", description: "Informe o nome do serviço.", variant: "destructive" })
+      toast({
+        title: "Nome obrigatório",
+        description: "Informe o nome do serviço.",
+        variant: "destructive",
+      })
       return
     }
 
     const parsedPrice = Number.parseFloat(price)
-    const parsedDuration = Number.parseInt(duration, 10)
+    const parsedDuration = Number(duration)
 
     if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
-      toast({ title: "Preço inválido", description: "Informe um preço válido.", variant: "destructive" })
+      toast({
+        title: "Preço inválido",
+        description: "Informe um preço válido.",
+        variant: "destructive",
+      })
       return
     }
 
-    if (Number.isNaN(parsedDuration) || parsedDuration <= 0) {
-      toast({ title: "Duração inválida", description: "Informe uma duração válida.", variant: "destructive" })
+    if (
+      !Number.isInteger(parsedDuration) ||
+      parsedDuration <= 0 ||
+      parsedDuration > 1440
+    ) {
+      toast({
+        title: "Duração inválida",
+        description: "Informe uma duração inteira em minutos, de 1 a 1440.",
+        variant: "destructive",
+      })
       return
     }
 
@@ -141,15 +183,29 @@ export function ServiceManagement({
 
         if (error) throw error
 
-        setServices((prev) => prev.map((s) => (s.id === editingService.id ? { ...s, ...baseData } : s)))
-        toast({ title: "Serviço atualizado", description: "O serviço foi atualizado com sucesso." })
+        setServices((prev) =>
+          prev.map((s) =>
+            s.id === editingService.id ? { ...s, ...baseData } : s,
+          ),
+        )
+        toast({
+          title: "Serviço atualizado",
+          description: "O serviço foi atualizado com sucesso.",
+        })
       } else {
         const payload = { ...baseData, is_active: true }
-        const { data, error } = await supabase.from("services").insert(payload).select().single()
+        const { data, error } = await supabase
+          .from("services")
+          .insert(payload)
+          .select()
+          .single()
         if (error) throw error
 
         setServices((prev) => [...prev, data])
-        toast({ title: "Serviço criado", description: "O novo serviço foi criado com sucesso." })
+        toast({
+          title: "Serviço criado",
+          description: "O novo serviço foi criado com sucesso.",
+        })
       }
 
       setIsDialogOpen(false)
@@ -167,7 +223,10 @@ export function ServiceManagement({
     }
   }
 
-  const toggleServiceStatus = async (serviceId: string, currentStatus: boolean) => {
+  const toggleServiceStatus = async (
+    serviceId: string,
+    currentStatus: boolean,
+  ) => {
     if (isReadOnly) {
       toast({
         title: "Sem permissão",
@@ -188,7 +247,11 @@ export function ServiceManagement({
 
       if (error) throw error
 
-      setServices((prev) => prev.map((s) => (s.id === serviceId ? { ...s, is_active: !currentStatus } : s)))
+      setServices((prev) =>
+        prev.map((s) =>
+          s.id === serviceId ? { ...s, is_active: !currentStatus } : s,
+        ),
+      )
 
       toast({
         title: currentStatus ? "Serviço desativado" : "Serviço ativado",
@@ -202,35 +265,8 @@ export function ServiceManagement({
       console.error("[ServiceManagement] toggle error:", error)
       toast({
         title: "Erro",
-        description: error?.message || "Não foi possível alterar o status do serviço.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const deleteService = async (serviceId: string) => {
-    if (isReadOnly) {
-      toast({ title: "Sem permissão", description: "Seu perfil não pode excluir serviços.", variant: "destructive" })
-      return
-    }
-    if (!barbershopId) return
-    if (!confirm("Tem certeza que deseja excluir este serviço?")) return
-
-    setIsLoading(true)
-    try {
-      const { error } = await supabase.from("services").delete().eq("id", serviceId).eq("barbershop_id", barbershopId)
-      if (error) throw error
-
-      setServices((prev) => prev.filter((s) => s.id !== serviceId))
-      toast({ title: "Serviço excluído", description: "O serviço foi removido com sucesso." })
-      router.refresh()
-    } catch (error: any) {
-      console.error("[ServiceManagement] delete error:", error)
-      toast({
-        title: "Erro ao excluir",
-        description: error?.message || "Não foi possível excluir o serviço. Verifique se há agendamentos vinculados.",
+        description:
+          error?.message || "Não foi possível alterar o status do serviço.",
         variant: "destructive",
       })
     } finally {
@@ -246,13 +282,18 @@ export function ServiceManagement({
             <CardTitle className="flex items-center gap-2">
               Gestão de Serviços
               {isReadOnly ? (
-                <Badge variant="secondary" className="inline-flex items-center gap-1">
+                <Badge
+                  variant="secondary"
+                  className="inline-flex items-center gap-1"
+                >
                   <Lock className="h-3 w-3" />
                   Somente leitura
                 </Badge>
               ) : null}
             </CardTitle>
-            <CardDescription>Gerencie os serviços oferecidos pela barbearia</CardDescription>
+            <CardDescription>
+              Gerencie os serviços oferecidos pela barbearia
+            </CardDescription>
           </div>
 
           {!isReadOnly ? (
@@ -266,7 +307,9 @@ export function ServiceManagement({
 
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>{editingService ? "Editar Serviço" : "Novo Serviço"}</DialogTitle>
+                  <DialogTitle>
+                    {editingService ? "Editar Serviço" : "Novo Serviço"}
+                  </DialogTitle>
                   <DialogDescription>
                     {editingService
                       ? "Atualize as informações do serviço. Agendamentos existentes não serão afetados."
@@ -325,7 +368,11 @@ export function ServiceManagement({
                   </div>
 
                   <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? "Salvando..." : editingService ? "Atualizar Serviço" : "Criar Serviço"}
+                    {isLoading
+                      ? "Salvando..."
+                      : editingService
+                        ? "Atualizar Serviço"
+                        : "Criar Serviço"}
                   </Button>
                 </form>
               </DialogContent>
@@ -337,21 +384,29 @@ export function ServiceManagement({
       <CardContent>
         <div className="space-y-4">
           {services.map((service) => (
-            <div key={service.id} className="flex items-start justify-between rounded-lg border p-4">
-              <div className="flex-1 space-y-1">
-                <div className="flex items-center gap-2">
-                  <h4 className="font-semibold">{service.name}</h4>
+            <div
+              key={service.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-4"
+            >
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h4 className="break-words font-semibold">{service.name}</h4>
                   <Badge variant={service.is_active ? "default" : "secondary"}>
                     {service.is_active ? "Ativo" : "Inativo"}
                   </Badge>
                 </div>
 
-                {service.description && <p className="text-sm text-muted-foreground">{service.description}</p>}
+                {service.description && (
+                  <p className="text-sm text-muted-foreground">
+                    {service.description}
+                  </p>
+                )}
 
                 <div className="flex items-center gap-4 text-sm">
                   <div className="flex items-center gap-1 text-muted-foreground">
-                    <DollarSign className="h-4 w-4" />
-                    <span>R$ {Number(service.price || 0).toFixed(2)}</span>
+                    <span className="font-medium text-slate-900">
+                      {money(service.price)}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1 text-muted-foreground">
                     <Clock className="h-4 w-4" />
@@ -363,17 +418,22 @@ export function ServiceManagement({
               {/* ✅ AÇÕES: owner only */}
               {!isReadOnly ? (
                 <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => openEditDialog(service)} disabled={isLoading}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openEditDialog(service)}
+                    disabled={isLoading}
+                    aria-label={`Editar ${service.name}`}
+                  >
                     <Edit className="h-4 w-4" />
-                  </Button>
-
-                  <Button size="sm" variant="outline" onClick={() => deleteService(service.id)} disabled={isLoading}>
-                    <Trash2 className="h-4 w-4 text-red-500" />
                   </Button>
 
                   <Switch
                     checked={!!service.is_active}
-                    onCheckedChange={() => toggleServiceStatus(service.id, !!service.is_active)}
+                    aria-label={`Disponibilidade de ${service.name}`}
+                    onCheckedChange={() =>
+                      toggleServiceStatus(service.id, !!service.is_active)
+                    }
                     disabled={isLoading}
                   />
                 </div>

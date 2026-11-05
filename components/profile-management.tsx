@@ -5,15 +5,39 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { useToast } from "@/hooks/use-toast"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 
 import type { BarbershopSettings, Barber } from "@/lib/types"
-import { Edit, Plus, Trash2, UserRound, Lock, Upload, ExternalLink, Download, X } from "lucide-react"
+import {
+  Edit,
+  Plus,
+  Trash2,
+  UserRound,
+  Lock,
+  Upload,
+  ExternalLink,
+  Download,
+  X,
+} from "lucide-react"
+import { normalizePhone } from "@/lib/barber/time"
 import { deleteBarberAndRelated } from "@/app/actions"
 
 type ShopRole = "owner" | "staff"
@@ -25,6 +49,7 @@ interface ProfileManagementProps {
   barberRolesById?: Record<string, string>
   role?: ShopRole
   myBarberId?: string | null
+  section?: "team" | "page"
 }
 
 const BUCKET = "barbershop-assets"
@@ -55,7 +80,10 @@ function withCacheBuster(url: string, v?: number) {
   return `${url}${hasQuery ? "&" : "?"}v=${v}`
 }
 
-function publicUrlFromPath(supabase: ReturnType<typeof createClient>, path: string) {
+function publicUrlFromPath(
+  supabase: ReturnType<typeof createClient>,
+  path: string,
+) {
   if (!path) return ""
   if (path.startsWith("http://") || path.startsWith("https://")) return path
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
@@ -73,6 +101,7 @@ export function ProfileManagement({
   barberRolesById = {},
   role = "owner",
   myBarberId = null,
+  section = "team",
 }: ProfileManagementProps) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -93,6 +122,7 @@ export function ProfileManagement({
   const [heroBust, setHeroBust] = useState<number>(0)
 
   const [name, setName] = useState(settings?.name || "")
+  const [whatsapp, setWhatsapp] = useState(settings?.whatsapp_phone || "")
   const [description, setDescription] = useState(settings?.description || "")
   const [logoPath, setLogoPath] = useState(settings?.logo_url || "")
   const [heroPath, setHeroPath] = useState(settings?.hero_background_url || "")
@@ -101,6 +131,7 @@ export function ProfileManagement({
   useEffect(() => {
     setName(settings?.name || "")
     setDescription(settings?.description || "")
+    setWhatsapp(settings?.whatsapp_phone || "")
     setLogoPath(settings?.logo_url || "")
     setHeroPath(settings?.hero_background_url || "")
     setLogoBust(0)
@@ -110,6 +141,7 @@ export function ProfileManagement({
   const hasChanges =
     name !== (settings?.name || "") ||
     description !== (settings?.description || "") ||
+    whatsapp !== (settings?.whatsapp_phone || "") ||
     logoPath !== (settings?.logo_url || "") ||
     heroPath !== (settings?.hero_background_url || "")
 
@@ -137,7 +169,11 @@ export function ProfileManagement({
 
   async function removeImage(path: string, type: "logo" | "hero") {
     if (!canManageShopProfile) {
-      toast({ title: "Sem permissão", description: "Apenas o dono pode remover imagens.", variant: "destructive" })
+      toast({
+        title: "Sem permissão",
+        description: "Apenas o dono pode remover imagens.",
+        variant: "destructive",
+      })
       return
     }
     if (!path) return
@@ -156,9 +192,16 @@ export function ProfileManagement({
         setHeroBust(Date.now())
       }
 
-      toast({ title: "Imagem removida", description: "Clique em salvar para aplicar." })
+      toast({
+        title: "Imagem removida",
+        description: "Clique em salvar para aplicar.",
+      })
     } catch (err: any) {
-      toast({ title: "Erro", description: err?.message || "Falha ao remover imagem.", variant: "destructive" })
+      toast({
+        title: "Erro",
+        description: err?.message || "Falha ao remover imagem.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -168,7 +211,11 @@ export function ProfileManagement({
     if (!file) return
 
     if (!canManageShopProfile) {
-      toast({ title: "Sem permissão", description: "Apenas o dono pode alterar a logo.", variant: "destructive" })
+      toast({
+        title: "Sem permissão",
+        description: "Apenas o dono pode alterar a logo.",
+        variant: "destructive",
+      })
       return
     }
 
@@ -177,9 +224,16 @@ export function ProfileManagement({
       const path = await uploadImage(file, "logo")
       setLogoPath(path)
       setLogoBust(Date.now())
-      toast({ title: "Logo enviada", description: "Preview atualizado. Clique em salvar para aplicar." })
+      toast({
+        title: "Logo enviada",
+        description: "Preview atualizado. Clique em salvar para aplicar.",
+      })
     } catch (err: any) {
-      toast({ title: "Erro", description: err?.message || "Falha ao enviar logo.", variant: "destructive" })
+      toast({
+        title: "Erro",
+        description: err?.message || "Falha ao enviar logo.",
+        variant: "destructive",
+      })
     } finally {
       setIsUploadingLogo(false)
     }
@@ -204,9 +258,16 @@ export function ProfileManagement({
       const path = await uploadImage(file, "hero")
       setHeroPath(path)
       setHeroBust(Date.now())
-      toast({ title: "Background enviado", description: "Preview atualizado. Clique em salvar para aplicar." })
+      toast({
+        title: "Background enviado",
+        description: "Preview atualizado. Clique em salvar para aplicar.",
+      })
     } catch (err: any) {
-      toast({ title: "Erro", description: err?.message || "Falha ao enviar background.", variant: "destructive" })
+      toast({
+        title: "Erro",
+        description: err?.message || "Falha ao enviar background.",
+        variant: "destructive",
+      })
     } finally {
       setIsUploadingHero(false)
     }
@@ -216,14 +277,28 @@ export function ProfileManagement({
     if (!canManageShopProfile) {
       toast({
         title: "Sem permissão",
-        description: "Apenas o dono pode salvar alterações do perfil da barbearia.",
+        description:
+          "Apenas o dono pode salvar alterações do perfil da barbearia.",
         variant: "destructive",
       })
       return
     }
 
     if (!name.trim()) {
-      toast({ title: "Nome obrigatório", description: "Digite o nome da barbearia.", variant: "destructive" })
+      toast({
+        title: "Nome obrigatório",
+        description: "Digite o nome da barbearia.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const phone = normalizePhone(whatsapp)
+    if (whatsapp.trim() && !/^[1-9]{2}[0-9]{8,9}$/.test(phone)) {
+      toast({
+        title: "Informe um WhatsApp com DDD e número válido.",
+        variant: "destructive",
+      })
       return
     }
 
@@ -232,32 +307,46 @@ export function ProfileManagement({
     const targetId = settings?.id ?? barbershopId
 
     try {
-      if (!targetId) throw new Error("ID alvo ausente. settings.id e barbershopId vieram vazios.")
+      if (!targetId)
+        throw new Error(
+          "ID alvo ausente. settings.id e barbershopId vieram vazios.",
+        )
 
       const payload = {
         name: name.trim(),
         description: description.trim() || null,
+        whatsapp_phone: phone || null,
         logo_url: logoPath || null,
         hero_background_url: heroPath || null,
         updated_at: new Date().toISOString(),
       }
 
-      const upd = await supabase.from("barbershop_settings").update(payload).eq("id", targetId).select("id, updated_at")
+      const upd = await supabase
+        .from("barbershop_settings")
+        .update(payload)
+        .eq("id", targetId)
+        .select("id, updated_at")
 
       if (upd.error) throw upd.error
 
       const row = upd.data?.[0]
       if (!row) {
-        throw new Error("UPDATE retornou 0 linhas (provável RLS ou SELECT pós-update bloqueado).")
+        throw new Error(
+          "UPDATE retornou 0 linhas (provável RLS ou SELECT pós-update bloqueado).",
+        )
       }
 
-      toast({ title: "Perfil salvo", description: "As configurações foram aplicadas com sucesso." })
+      toast({
+        title: "Perfil salvo",
+        description: "As configurações foram aplicadas com sucesso.",
+      })
       router.refresh()
     } catch (err: any) {
       console.error("[ProfileManagement] handleSaveProfile error:", err)
       toast({
         title: "Erro ao salvar",
-        description: err?.message || "Não foi possível salvar as configurações.",
+        description:
+          err?.message || "Não foi possível salvar as configurações.",
         variant: "destructive",
       })
     } finally {
@@ -292,7 +381,11 @@ export function ProfileManagement({
 
   const openAddBarberDialog = () => {
     if (!canManageBarbers) {
-      toast({ title: "Sem permissão", description: "Apenas o dono pode adicionar barbeiros.", variant: "destructive" })
+      toast({
+        title: "Sem permissão",
+        description: "Apenas o dono pode adicionar barbeiros.",
+        variant: "destructive",
+      })
       return
     }
     setEditingBarber(null)
@@ -322,11 +415,19 @@ export function ProfileManagement({
 
     // owner pode criar/editar qualquer; staff só edita o próprio
     if (editingBarber && !canEditThisBarber(editingBarber.id)) {
-      toast({ title: "Sem permissão", description: "Você não pode editar esse barbeiro.", variant: "destructive" })
+      toast({
+        title: "Sem permissão",
+        description: "Você não pode editar esse barbeiro.",
+        variant: "destructive",
+      })
       return
     }
     if (!editingBarber && !canManageBarbers) {
-      toast({ title: "Sem permissão", description: "Apenas o dono pode criar barbeiros.", variant: "destructive" })
+      toast({
+        title: "Sem permissão",
+        description: "Apenas o dono pode criar barbeiros.",
+        variant: "destructive",
+      })
       return
     }
 
@@ -347,15 +448,29 @@ export function ProfileManagement({
 
         if (error) throw error
 
-        setBarbers((prev) => prev.map((b) => (b.id === editingBarber.id ? { ...b, ...barberData } : b)))
-        toast({ title: "Barbeiro atualizado", description: "As informações foram atualizadas com sucesso." })
+        setBarbers((prev) =>
+          prev.map((b) =>
+            b.id === editingBarber.id ? { ...b, ...barberData } : b,
+          ),
+        )
+        toast({
+          title: "Barbeiro atualizado",
+          description: "As informações foram atualizadas com sucesso.",
+        })
       } else {
-        const { data, error } = await supabase.from("barbers").insert(barberData).select().single()
+        const { data, error } = await supabase
+          .from("barbers")
+          .insert(barberData)
+          .select()
+          .single()
         if (error) throw error
         if (!data) throw new Error("Erro ao criar barbeiro")
 
         setBarbers((prev) => [...prev, data])
-        toast({ title: "Barbeiro adicionado", description: "O novo barbeiro foi cadastrado com sucesso." })
+        toast({
+          title: "Barbeiro adicionado",
+          description: "O novo barbeiro foi cadastrado com sucesso.",
+        })
       }
 
       setNewBarberName("")
@@ -368,7 +483,8 @@ export function ProfileManagement({
       console.error("Error saving barber:", error)
       toast({
         title: "Erro",
-        description: error?.message || "Não foi possível salvar as informações.",
+        description:
+          error?.message || "Não foi possível salvar as informações.",
         variant: "destructive",
       })
     } finally {
@@ -378,7 +494,11 @@ export function ProfileManagement({
 
   const handleDeleteBarber = async (id: string) => {
     if (!canManageBarbers) {
-      toast({ title: "Sem permissão", description: "Apenas o dono pode excluir barbeiros.", variant: "destructive" })
+      toast({
+        title: "Sem permissão",
+        description: "Apenas o dono pode excluir barbeiros.",
+        variant: "destructive",
+      })
       return
     }
 
@@ -395,14 +515,19 @@ export function ProfileManagement({
       if (!result.ok) throw new Error(result.error)
 
       setBarbers((prev) => prev.filter((b) => b.id !== id))
-      toast({ title: "Barbeiro excluído", description: "O barbeiro foi removido com sucesso." })
+      toast({
+        title: "Barbeiro excluído",
+        description: "O barbeiro foi removido com sucesso.",
+      })
       router.refresh()
     } catch (error: any) {
       console.error("Error deleting barber:", error)
       const errorMessage = error?.message || error?.details || error?.hint
       toast({
         title: "Erro",
-        description: errorMessage || "Não foi possível excluir o barbeiro. Verifique se há agendamentos vinculados.",
+        description:
+          errorMessage ||
+          "Não foi possível excluir o barbeiro. Verifique se há agendamentos vinculados.",
         variant: "destructive",
       })
     } finally {
@@ -412,8 +537,14 @@ export function ProfileManagement({
 
   return (
     <div className="space-y-6">
-      <Dialog open={!!previewUrl} onOpenChange={(open) => (!open ? setPreviewUrl(null) : null)}>
-        <DialogContent showCloseButton={false} className="max-w-4xl border-0 bg-black/70 p-2 shadow-2xl backdrop-blur">
+      <Dialog
+        open={!!previewUrl}
+        onOpenChange={(open) => (!open ? setPreviewUrl(null) : null)}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="max-w-4xl border-0 bg-black/70 p-2 shadow-2xl backdrop-blur"
+        >
           <DialogHeader className="sr-only">
             <DialogTitle>Pré-visualização da imagem</DialogTitle>
           </DialogHeader>
@@ -429,345 +560,513 @@ export function ProfileManagement({
             </Button>
             {previewUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={previewUrl} alt="Preview da imagem" className="max-h-[80vh] w-full rounded-lg object-contain" />
+              <img
+                src={previewUrl}
+                alt="Preview da imagem"
+                className="max-h-[80vh] w-full rounded-lg object-contain"
+              />
             ) : null}
           </div>
         </DialogContent>
       </Dialog>
-      {/* ✅ GERENCIAR BARBEIROS */}
-      <Card className="border-muted/60 shadow-sm">
-        <CardHeader className="space-y-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/40">
-                  <UserRound className="h-4 w-4 text-muted-foreground" />
+      {section === "team" ? (
+        <Card className="border-muted/60 shadow-sm">
+          <CardHeader className="space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/40">
+                    <UserRound className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <CardTitle className="text-lg sm:text-xl">
+                    {isStaff ? "Meu perfil" : "Equipe"}
+                  </CardTitle>
                 </div>
-                <CardTitle className="text-lg sm:text-xl">Gerenciar Barbeiros</CardTitle>
+
+                <CardDescription className="flex items-center gap-2">
+                  {canManageBarbers ? (
+                    <>Adicione, edite ou remova profissionais da equipe</>
+                  ) : (
+                    <>
+                      <Lock className="h-4 w-4" />
+                      Atualize seu nome e sua especialidade.
+                    </>
+                  )}
+                </CardDescription>
               </div>
 
-              <CardDescription className="flex items-center gap-2">
+              <Dialog
+                open={isBarberDialogOpen}
+                onOpenChange={setIsBarberDialogOpen}
+              >
                 {canManageBarbers ? (
-                  <>Adicione, edite ou remova profissionais da equipe</>
+                  <DialogTrigger asChild>
+                    <Button
+                      onClick={openAddBarberDialog}
+                      className="w-full sm:w-auto"
+                      disabled={!canManageBarbers}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Adicionar Barbeiro
+                    </Button>
+                  </DialogTrigger>
+                ) : null}
+
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>
+                      {editingBarber ? "Editar Barbeiro" : "Novo Barbeiro"}
+                    </DialogTitle>
+                    <DialogDescription>
+                      {editingBarber
+                        ? "Edite as informações do profissional."
+                        : "Cadastre um novo profissional."}
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <form onSubmit={handleSaveBarber} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="barber_name">Nome</Label>
+                      <Input
+                        id="barber_name"
+                        value={newBarberName}
+                        onChange={(e) => setNewBarberName(e.target.value)}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="barber_specialty">
+                        Especialidade (opcional)
+                      </Label>
+                      <Input
+                        id="barber_specialty"
+                        value={newBarberSpecialty}
+                        onChange={(e) => setNewBarberSpecialty(e.target.value)}
+                      />
+                    </div>
+
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={isSavingBarber}
+                    >
+                      {isSavingBarber ? "Salvando..." : "Salvar"}
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </CardHeader>
+
+          <CardContent>
+            <div className="space-y-3">
+              {barbers.map((barber) => {
+                const canEdit = canEditThisBarber(barber.id)
+                const barberRole = barberRolesById[barber.id]
+                const isOwnerTarget =
+                  barberRole === "owner" ||
+                  (role === "owner" && barber.id === myBarberId)
+                const canDelete = canManageBarbers && !isOwnerTarget
+
+                return (
+                  <div
+                    key={barber.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border bg-muted/10 p-4 transition-colors hover:bg-muted/20"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">
+                        {barber.name}
+                        {isStaff && myBarberId && barber.id === myBarberId ? (
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            (você)
+                          </span>
+                        ) : null}
+                      </p>
+                      {barber.specialty && (
+                        <p className="truncate text-sm text-muted-foreground">
+                          {barber.specialty}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex shrink-0 gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEditBarberDialog(barber)}
+                        disabled={isSavingBarber || !canEdit}
+                        title={canEdit ? "Editar" : "Sem permissão"}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteBarber(barber.id)}
+                        disabled={isSavingBarber || !canDelete}
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        title={
+                          !canManageBarbers
+                            ? "Sem permissão"
+                            : isOwnerTarget
+                              ? "Apenas o admin master pode excluir owner"
+                              : "Excluir"
+                        }
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+
+              {barbers.length === 0 && (
+                <p className="text-center text-muted-foreground">
+                  Nenhum barbeiro cadastrado.
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {section === "page" && canManageShopProfile ? (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_19rem]">
+          <Card className="border-muted/60 shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                Página de agendamento
+                {!canManageShopProfile ? (
+                  <Lock className="h-4 w-4 text-muted-foreground" />
+                ) : null}
+              </CardTitle>
+
+              <CardDescription>
+                {canManageShopProfile ? (
+                  <>
+                    Confira a prévia da página e publique as alterações em{" "}
+                    <strong>Salvar alterações</strong>.
+                  </>
                 ) : (
                   <>
-                    <Lock className="h-4 w-4" />
-                    Equipe bloqueada para staff (você pode editar apenas seu perfil)
+                    Somente o dono pode alterar nome/descrição/logo/background.
                   </>
                 )}
               </CardDescription>
-            </div>
+            </CardHeader>
 
-            <Dialog open={isBarberDialogOpen} onOpenChange={setIsBarberDialogOpen}>
-              <DialogTrigger asChild>
-                <Button onClick={openAddBarberDialog} className="w-full sm:w-auto" disabled={!canManageBarbers}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Adicionar Barbeiro
-                </Button>
-              </DialogTrigger>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label>Nome</Label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ex: Barbearia Premium"
+                  disabled={!canManageShopProfile}
+                />
+              </div>
 
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>{editingBarber ? "Editar Barbeiro" : "Novo Barbeiro"}</DialogTitle>
-                  <DialogDescription>
-                    {editingBarber ? "Edite as informações do profissional." : "Cadastre um novo profissional."}
-                  </DialogDescription>
-                </DialogHeader>
+              <div className="space-y-2">
+                <Label>Descrição</Label>
+                <Textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Ex: Agende seu horário online"
+                  rows={3}
+                  disabled={!canManageShopProfile}
+                />
+              </div>
 
-                <form onSubmit={handleSaveBarber} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="barber_name">Nome</Label>
-                    <Input
-                      id="barber_name"
-                      value={newBarberName}
-                      onChange={(e) => setNewBarberName(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="barber_specialty">Especialidade (opcional)</Label>
-                    <Input
-                      id="barber_specialty"
-                      value={newBarberSpecialty}
-                      onChange={(e) => setNewBarberSpecialty(e.target.value)}
-                    />
-                  </div>
-
-                  <Button type="submit" className="w-full" disabled={isSavingBarber}>
-                    {isSavingBarber ? "Salvando..." : "Salvar"}
-                  </Button>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </CardHeader>
-
-        <CardContent>
-          <div className="space-y-3">
-            {barbers.map((barber) => {
-              const canEdit = canEditThisBarber(barber.id)
-              const barberRole = barberRolesById[barber.id]
-              const isOwnerTarget = barberRole === "owner"
-              const canDelete = canManageBarbers && !isOwnerTarget
-
-              return (
-                <div
-                  key={barber.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border bg-muted/10 p-4 transition-colors hover:bg-muted/20"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">
-                      {barber.name}
-                      {isStaff && myBarberId && barber.id === myBarberId ? (
-                        <span className="ml-2 text-xs text-muted-foreground">(você)</span>
-                      ) : null}
+              {/* LOGO */}
+              <div className="space-y-3">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="space-y-1">
+                    <Label>Logo</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Preview do logo usado no site e no dashboard.
                     </p>
-                    {barber.specialty && <p className="truncate text-sm text-muted-foreground">{barber.specialty}</p>}
                   </div>
 
-                  <div className="flex shrink-0 gap-1">
+                  <div className="flex w-full flex-nowrap gap-2 sm:w-auto">
                     <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => openEditBarberDialog(barber)}
-                      disabled={isSavingBarber || !canEdit}
-                      title={canEdit ? "Editar" : "Sem permissão"}
+                      asChild
+                      variant="outline"
+                      disabled={isUploadingLogo || !canManageShopProfile}
+                      className="w-12 border-primary/30 bg-background/60 shadow-[0_0_0_1px_rgba(99,102,241,0.15)] hover:bg-primary/5"
                     >
-                      <Edit className="h-4 w-4" />
+                      <label
+                        className="cursor-pointer"
+                        aria-label="Enviar logo"
+                        title="Enviar logo"
+                      >
+                        {isUploadingLogo ? (
+                          "Enviando..."
+                        ) : (
+                          <>
+                            <Upload className="h-4 w-4" />
+                            <span className="sr-only">Enviar logo</span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/*"
+                          onChange={handleUploadLogo}
+                        />
+                      </label>
                     </Button>
 
                     <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteBarber(barber.id)}
-                      disabled={isSavingBarber || !canDelete}
-                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      title={
-                        !canManageBarbers
-                          ? "Sem permissão"
-                          : isOwnerTarget
-                            ? "Apenas o admin master pode excluir owner"
-                            : "Excluir"
-                      }
+                      variant="outline"
+                      disabled={!logoPublicUrl}
+                      onClick={() => setPreviewUrl(logoPublicUrl)}
+                      className="w-12 border-primary/20 bg-background/60 hover:bg-primary/5"
+                      aria-label="Abrir logo"
+                      title="Abrir logo"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      <span className="sr-only">Abrir logo</span>
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      disabled={!logoPublicUrl}
+                      onClick={() => downloadFile(logoPublicUrl, "logo")}
+                      className="w-12 border-primary/20 bg-background/60 hover:bg-primary/5"
+                      aria-label="Baixar logo"
+                      title="Baixar logo"
+                    >
+                      <Download className="h-4 w-4" />
+                      <span className="sr-only">Baixar logo</span>
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      disabled={!logoPath || !canManageShopProfile}
+                      onClick={() => removeImage(logoPath, "logo")}
+                      className="w-12 border-destructive/30 bg-background/60 text-destructive hover:bg-destructive/10"
+                      aria-label="Remover logo"
+                      title="Remover logo"
                     >
                       <Trash2 className="h-4 w-4" />
+                      <span className="sr-only">Remover logo</span>
                     </Button>
                   </div>
                 </div>
-              )
-            })}
 
-            {barbers.length === 0 && <p className="text-center text-muted-foreground">Nenhum barbeiro cadastrado.</p>}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ✅ PERFIL DA BARBEARIA */}
-      <Card className="border-muted/60 shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            Perfil da Barbearia
-            {!canManageShopProfile ? <Lock className="h-4 w-4 text-muted-foreground" /> : null}
-          </CardTitle>
-
-          <CardDescription>
-            {canManageShopProfile ? (
-              <>
-                Você pode enviar as imagens e ver o preview. Elas só são aplicadas quando clicar em{" "}
-                <strong>Salvar alterações</strong>.
-              </>
-            ) : (
-              <>Somente o dono pode alterar nome/descrição/logo/background.</>
-            )}
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label>Nome</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: Barbearia Premium"
-              disabled={!canManageShopProfile}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Descrição</Label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Ex: Agende seu horário online"
-              rows={3}
-              disabled={!canManageShopProfile}
-            />
-          </div>
-
-          {/* LOGO */}
-          <div className="space-y-3">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-              <div className="space-y-1">
-                <Label>Logo</Label>
-                <p className="text-xs text-muted-foreground">Preview do logo usado no site e no dashboard.</p>
-              </div>
-
-              <div className="flex w-full flex-nowrap gap-2 sm:w-auto">
-                <Button
-                  asChild
-                  variant="outline"
-                  disabled={isUploadingLogo || !canManageShopProfile}
-                  className="w-12 border-primary/30 bg-background/60 shadow-[0_0_0_1px_rgba(99,102,241,0.15)] hover:bg-primary/5"
-                >
-                  <label className="cursor-pointer" aria-label="Enviar logo" title="Enviar logo">
-                    {isUploadingLogo ? (
-                      "Enviando..."
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4" />
-                        <span className="sr-only">Enviar logo</span>
-                      </>
-                    )}
-                    <input type="file" className="hidden" accept="image/*" onChange={handleUploadLogo} />
-                  </label>
-                </Button>
-
-                <Button
-                  variant="outline"
-                  disabled={!logoPublicUrl}
-                  onClick={() => setPreviewUrl(logoPublicUrl)}
-                  className="w-12 border-primary/20 bg-background/60 hover:bg-primary/5"
-                  aria-label="Abrir logo"
-                  title="Abrir logo"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  <span className="sr-only">Abrir logo</span>
-                </Button>
-
-                <Button
-                  variant="outline"
-                  disabled={!logoPublicUrl}
-                  onClick={() => downloadFile(logoPublicUrl, "logo")}
-                  className="w-12 border-primary/20 bg-background/60 hover:bg-primary/5"
-                  aria-label="Baixar logo"
-                  title="Baixar logo"
-                >
-                  <Download className="h-4 w-4" />
-                  <span className="sr-only">Baixar logo</span>
-                </Button>
-
-                <Button
-                  variant="outline"
-                  disabled={!logoPath || !canManageShopProfile}
-                  onClick={() => removeImage(logoPath, "logo")}
-                  className="w-12 border-destructive/30 bg-background/60 text-destructive hover:bg-destructive/10"
-                  aria-label="Remover logo"
-                  title="Remover logo"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span className="sr-only">Remover logo</span>
-                </Button>
-              </div>
-            </div>
-
-            <div className="rounded-xl border bg-muted/10 p-4 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.15)]">
-              {logoPublicUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={logoPreviewSrc} alt="Preview da logo" className="h-24 w-24 rounded-lg border bg-background object-cover" />
-              ) : (
-                <div className="flex h-24 w-24 items-center justify-center rounded-lg border bg-background text-xs text-muted-foreground">
-                  Sem logo
+                <div className="rounded-xl border bg-muted/10 p-4 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.15)]">
+                  {logoPublicUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={logoPreviewSrc}
+                      alt="Preview da logo"
+                      className="h-24 w-24 rounded-lg border bg-background object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-24 w-24 items-center justify-center rounded-lg border bg-background text-xs text-muted-foreground">
+                      Sem logo
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* BACKGROUND */}
-          <div className="space-y-3">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-              <div className="space-y-1">
-                <Label>Background do topo (site público)</Label>
-                <p className="text-xs text-muted-foreground">Imagem do fundo do topo da página de agendamento.</p>
               </div>
 
-              <div className="flex w-full flex-nowrap gap-2 sm:w-auto">
-                <Button
-                  asChild
-                  variant="outline"
-                  disabled={isUploadingHero || !canManageShopProfile}
-                  className="w-12 border-primary/30 bg-background/60 shadow-[0_0_0_1px_rgba(99,102,241,0.15)] hover:bg-primary/5"
-                >
-                  <label className="cursor-pointer" aria-label="Enviar background" title="Enviar background">
-                    {isUploadingHero ? (
-                      "Enviando..."
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4" />
-                        <span className="sr-only">Enviar background</span>
-                      </>
-                    )}
-                    <input type="file" className="hidden" accept="image/*" onChange={handleUploadHero} />
-                  </label>
-                </Button>
+              {/* BACKGROUND */}
+              <div className="space-y-3">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="space-y-1">
+                    <Label>Background do topo (site público)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Imagem do fundo do topo da página de agendamento.
+                    </p>
+                  </div>
 
-                <Button
-                  variant="outline"
-                  disabled={!heroPublicUrl}
-                  onClick={() => setPreviewUrl(heroPublicUrl)}
-                  className="w-12 border-primary/20 bg-background/60 hover:bg-primary/5"
-                  aria-label="Abrir background"
-                  title="Abrir background"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  <span className="sr-only">Abrir background</span>
-                </Button>
+                  <div className="flex w-full flex-nowrap gap-2 sm:w-auto">
+                    <Button
+                      asChild
+                      variant="outline"
+                      disabled={isUploadingHero || !canManageShopProfile}
+                      className="w-12 border-primary/30 bg-background/60 shadow-[0_0_0_1px_rgba(99,102,241,0.15)] hover:bg-primary/5"
+                    >
+                      <label
+                        className="cursor-pointer"
+                        aria-label="Enviar background"
+                        title="Enviar background"
+                      >
+                        {isUploadingHero ? (
+                          "Enviando..."
+                        ) : (
+                          <>
+                            <Upload className="h-4 w-4" />
+                            <span className="sr-only">Enviar background</span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/*"
+                          onChange={handleUploadHero}
+                        />
+                      </label>
+                    </Button>
 
-                <Button
-                  variant="outline"
-                  disabled={!heroPublicUrl}
-                  onClick={() => downloadFile(heroPublicUrl, "background")}
-                  className="w-12 border-primary/20 bg-background/60 hover:bg-primary/5"
-                  aria-label="Baixar background"
-                  title="Baixar background"
-                >
-                  <Download className="h-4 w-4" />
-                  <span className="sr-only">Baixar background</span>
-                </Button>
+                    <Button
+                      variant="outline"
+                      disabled={!heroPublicUrl}
+                      onClick={() => setPreviewUrl(heroPublicUrl)}
+                      className="w-12 border-primary/20 bg-background/60 hover:bg-primary/5"
+                      aria-label="Abrir background"
+                      title="Abrir background"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      <span className="sr-only">Abrir background</span>
+                    </Button>
 
-                <Button
-                  variant="outline"
-                  disabled={!heroPath || !canManageShopProfile}
-                  onClick={() => removeImage(heroPath, "hero")}
-                  className="w-12 border-destructive/30 bg-background/60 text-destructive hover:bg-destructive/10"
-                  aria-label="Remover background"
-                  title="Remover background"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span className="sr-only">Remover background</span>
-                </Button>
-              </div>
-            </div>
+                    <Button
+                      variant="outline"
+                      disabled={!heroPublicUrl}
+                      onClick={() => downloadFile(heroPublicUrl, "background")}
+                      className="w-12 border-primary/20 bg-background/60 hover:bg-primary/5"
+                      aria-label="Baixar background"
+                      title="Baixar background"
+                    >
+                      <Download className="h-4 w-4" />
+                      <span className="sr-only">Baixar background</span>
+                    </Button>
 
-            <div className="rounded-xl border bg-muted/10 p-4 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.15)]">
-              {heroPublicUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={heroPreviewSrc} alt="Preview do background" className="h-40 w-full rounded-lg border bg-background object-cover" />
-              ) : (
-                <div className="flex h-40 w-full items-center justify-center rounded-lg border bg-background text-sm text-muted-foreground">
-                  Sem background
+                    <Button
+                      variant="outline"
+                      disabled={!heroPath || !canManageShopProfile}
+                      onClick={() => removeImage(heroPath, "hero")}
+                      className="w-12 border-destructive/30 bg-background/60 text-destructive hover:bg-destructive/10"
+                      aria-label="Remover background"
+                      title="Remover background"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="sr-only">Remover background</span>
+                    </Button>
+                  </div>
                 </div>
-              )}
-            </div>
-          </div>
 
-          <div className="flex justify-end">
-            <Button onClick={handleSaveProfile} disabled={!canManageShopProfile || !hasChanges || isSaving}>
-              {isSaving ? "Salvando..." : "Salvar alterações"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+                <div className="rounded-xl border bg-muted/10 p-4 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.15)]">
+                  {heroPublicUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={heroPreviewSrc}
+                      alt="Preview do background"
+                      className="h-40 w-full rounded-lg border bg-background object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-40 w-full items-center justify-center rounded-lg border bg-background text-sm text-muted-foreground">
+                      Sem background
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="shop-whatsapp">WhatsApp da barbearia</Label>
+                <Input
+                  id="shop-whatsapp"
+                  type="tel"
+                  value={whatsapp}
+                  onChange={(event) => setWhatsapp(event.target.value)}
+                  placeholder="(81) 98765-4321"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Número exibido para contato após a reserva.
+                </p>
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSaveProfile}
+                  disabled={!canManageShopProfile || !hasChanges || isSaving}
+                >
+                  {isSaving ? "Salvando..." : "Salvar alterações"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+          <aside className="rounded-2xl border border-slate-200 bg-white p-4 xl:self-start">
+            <h2 className="text-sm font-semibold">Prévia no celular</h2>
+            <div className="mx-auto mt-4 max-w-xs overflow-hidden rounded-xl border border-slate-200">
+              <div className="flex items-center gap-2 px-3 py-3">
+                {logoPublicUrl ? (
+                  <img
+                    src={logoPreviewSrc}
+                    alt=""
+                    className="size-8 rounded-lg object-cover"
+                  />
+                ) : (
+                  <span
+                    aria-hidden
+                    className="grid size-8 place-items-center rounded-lg bg-slate-900 text-white"
+                  >
+                    ✂
+                  </span>
+                )}
+                <div className="min-w-0">
+                  <p className="break-words text-xs font-semibold">
+                    {name || "Barbearia"}
+                  </p>
+                  <p className="break-words text-[10px] text-slate-600">
+                    {description || "Agende seu horário online"}
+                  </p>
+                </div>
+              </div>
+              <div className="relative overflow-hidden bg-slate-900 px-4 py-8 text-center text-white">
+                {heroPublicUrl ? (
+                  <img
+                    src={heroPreviewSrc}
+                    alt=""
+                    className="absolute inset-0 size-full object-cover opacity-40"
+                  />
+                ) : null}
+                <div className="relative">
+                  <p className="text-sm font-semibold">Agende seu horário</p>
+                  <p className="mt-1 text-[10px] text-slate-200">
+                    Escolha o serviço e o profissional
+                  </p>
+                </div>
+              </div>
+            </div>
+            {settings?.slug ? (
+              <div className="mt-4 grid gap-2">
+                <Button asChild variant="outline" size="sm">
+                  <a
+                    href={`/${settings.slug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Abrir página
+                  </a>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(
+                        new URL(`/${settings.slug}`, window.location.origin)
+                          .href,
+                      )
+                      toast({ title: "Link da agenda copiado" })
+                    } catch {
+                      toast({
+                        title: "Abra a página e copie o endereço do navegador.",
+                      })
+                    }
+                  }}
+                >
+                  Copiar link da agenda
+                </Button>
+              </div>
+            ) : null}
+          </aside>
+        </div>
+      ) : null}
     </div>
   )
 }
