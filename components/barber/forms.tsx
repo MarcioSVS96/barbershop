@@ -24,8 +24,11 @@ import type { Appointment, Barber, Service } from "@/lib/types"
 import { useBookingTimes } from "../use-booking-times"
 
 export const fieldClass =
-  "h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700"
-export const primaryClass = "bg-[#16243b] text-white hover:bg-[#253753]"
+  "h-11 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700"
+export const primaryClass =
+  "min-h-11 rounded-xl bg-[#16243b] px-4 font-semibold text-white shadow-sm hover:bg-[#253753]"
+export const panelClass =
+  "min-w-0 rounded-2xl border border-slate-200 bg-white shadow-xs"
 
 export function BarberSheet({
   title,
@@ -45,8 +48,8 @@ export function BarberSheet({
         if (!open) close()
       }}
     >
-      <SheetContent className="w-full gap-0 overflow-y-auto bg-white sm:max-w-lg">
-        <SheetHeader className="border-b border-slate-200 px-6 py-6 pr-12">
+      <SheetContent className="w-full gap-0 overflow-hidden bg-white sm:max-w-lg [&>button]:top-3 [&>button]:right-3 [&>button]:grid [&>button]:size-11 [&>button]:place-items-center [&>button]:rounded-xl">
+        <SheetHeader className="shrink-0 border-b border-slate-200 bg-slate-50/75 px-5 py-5 pr-16 sm:px-6 sm:pr-16">
           <SheetTitle className="text-xl font-semibold tracking-tight text-slate-950">
             {title}
           </SheetTitle>
@@ -54,7 +57,9 @@ export function BarberSheet({
             {description}
           </SheetDescription>
         </SheetHeader>
-        <div className="space-y-5 p-6">{children}</div>
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-6">
+          {children}
+        </div>
       </SheetContent>
     </Sheet>
   )

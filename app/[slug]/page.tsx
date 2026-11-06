@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { BookingForm } from "@/components/booking-form"
-import { Scissors } from "lucide-react"
+import { CalendarDays, Check, Scissors } from "lucide-react"
 import { notFound } from "next/navigation"
 
 export const dynamic = "force-dynamic"
@@ -46,7 +46,7 @@ export default async function PublicBookingPage({
     .order("name", { ascending: true })
 
   const shopName = shop.name || "Barbearia"
-  const shopDesc = shop.description || "Agende seu horário online"
+  const shopDesc = shop.description?.trim()
 
   const publicUrlFromPath = (path: string | null) => {
     if (!path) return ""
@@ -66,71 +66,66 @@ export default async function PublicBookingPage({
   }
 
   const logoUrl = cacheBuster(publicUrlFromPath(shop.logo_url), shop.updated_at)
-  const heroBg = shop.hero_background_url
-    ? cacheBuster(publicUrlFromPath(shop.hero_background_url), shop.updated_at)
-    : "/bg-barbearia.jpg"
+  const heroBg = cacheBuster(publicUrlFromPath(shop.hero_background_url), shop.updated_at)
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-background to-muted/20">
-      <header className="border-b bg-card/50 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary overflow-hidden">
+    <div className="flex min-h-dvh flex-col bg-[#f6f4f0] text-[#172134]">
+      <header className="border-b border-[#e7e3db] bg-[#fcfbf8]">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6 sm:py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#172134] text-[#f4d3b4] sm:size-12">
               {logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={logoUrl}
-                  alt="Logo"
-                  className="h-full w-full object-cover"
-                />
+                <img src={logoUrl} alt="" className="size-full object-cover" />
               ) : (
-                <Scissors className="h-6 w-6 text-primary-foreground" />
+                <Scissors aria-hidden className="size-5" />
               )}
             </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">{shopName}</h1>
-              <p className="text-sm text-muted-foreground">{shopDesc}</p>
-            </div>
+            <p className="min-w-0 break-words text-base font-semibold leading-tight tracking-tight sm:text-lg">{shopName}</p>
           </div>
+          <span className="hidden shrink-0 items-center gap-2 rounded-full border border-[#e7e3db] bg-white px-3 py-1.5 text-xs font-medium text-slate-700 sm:inline-flex">
+            <CalendarDays aria-hidden className="size-3.5" /> Agenda online
+          </span>
         </div>
       </header>
 
-      <main className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-0">
-          <div
-            className="absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: `url(${heroBg})` }}
-          />
-          <div className="absolute inset-0 bg-black/65" />
-          <div className="absolute inset-0 bg-linear-to-b from-black/40 via-transparent to-background" />
-        </div>
+      <main className="mx-auto grid w-full max-w-6xl flex-1 content-start items-start gap-4 px-4 pt-5 pb-8 sm:px-6 sm:py-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-7 lg:py-10">
+        <section aria-labelledby="booking-heading" className="relative isolate flex min-w-0 flex-col justify-end overflow-hidden rounded-2xl bg-[#172134] bg-[radial-gradient(ellipse_at_top_right,#3c4e68,transparent_70%)] px-5 py-6 text-white sm:px-7 sm:py-8 lg:min-h-[24rem] lg:rounded-3xl lg:p-8">
+          {heroBg ? (
+            <>
+              <img src={heroBg} alt="" className="pointer-events-none absolute inset-0 -z-20 size-full object-cover" />
+              <span aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-linear-to-tr from-[#121b2c] via-[#121b2c]/90 to-[#121b2c]/35" />
+            </>
+          ) : (
+            <span aria-hidden className="pointer-events-none absolute -top-36 -right-36 -z-10 size-[25rem] rounded-full border border-[#f4d3b4]/25 ring-28 ring-white/5 lg:-top-22" />
+          )}
+          <p className="mb-2.5 flex items-center gap-2 text-[11px] font-semibold tracking-[0.16em] text-[#f4d3b4] uppercase sm:mb-3">
+            <span aria-hidden className="h-px w-5 bg-current" /> Sua reserva online
+          </p>
+          <h1 id="booking-heading" className="max-w-[11ch] text-[2rem] leading-[1.06] font-semibold tracking-[-0.045em] sm:text-[2.6rem] lg:text-[3.2rem]">
+            Agende seu horário
+          </h1>
+          <p className="mt-3 max-w-[32ch] break-words text-sm leading-relaxed text-slate-200 sm:text-base">
+            {shopDesc || "Escolha o serviço e reserve o melhor horário para você."}
+          </p>
+          <p className="mt-4 flex items-center gap-2 text-xs font-medium text-slate-200 lg:mt-6">
+            <span aria-hidden className="grid size-5 place-items-center rounded-full bg-white/10 text-[#f4d3b4]">
+              <Check className="size-3" />
+            </span>
+            Agendamento sem cadastro
+          </p>
+        </section>
 
-        <div className="relative container mx-auto px-4 py-12">
-          <div className="mx-auto max-w-4xl">
-            <div className="mb-8 text-center text-white">
-              <h2 className="mb-2 text-3xl font-bold tracking-tight">
-                Agende seu horário
-              </h2>
-              <p className="text-white/80">
-                Escolha o serviço, barbeiro e horário de sua preferência
-              </p>
-            </div>
-
-            <div className="rounded-xl bg-white text-zinc-900 shadow-xl ring-1 ring-black/10">
-              <BookingForm
-                services={services || []}
-                barbers={barbers || []}
-                barbershopId={barbershopId}
-                whatsappPhone={shop.whatsapp_phone}
-              />
-            </div>
-          </div>
-        </div>
+        <BookingForm
+          services={services || []}
+          barbers={barbers || []}
+          barbershopId={barbershopId}
+          whatsappPhone={shop.whatsapp_phone}
+        />
       </main>
 
-      <footer className="mt-16 border-t py-8">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>{shopName} - Todos os direitos reservados</p>
+      <footer className="border-t border-[#e7e3db] py-5">
+        <div className="mx-auto max-w-6xl px-4 text-center text-xs text-slate-600 sm:px-6 sm:text-left">
+          <p className="break-words">{shopName} · Todos os direitos reservados</p>
         </div>
       </footer>
     </div>

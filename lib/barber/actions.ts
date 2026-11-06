@@ -63,8 +63,9 @@ async function memberOf(shopId: string) {
   const db = await createClient()
   const {
     data: { user },
+    error,
   } = await db.auth.getUser()
-  if (!user) return null
+  if (error || !user) return null
   const [member, shop] = await Promise.all([
     db
       .from("barbershop_members")
@@ -79,8 +80,10 @@ async function memberOf(shopId: string) {
       .maybeSingle(),
   ])
   if (
+    member.error ||
+    shop.error ||
     !member.data ||
-    (member.data.role !== "owner" && member.data.role !== "staff") ||
+    (member.data.role !== "owner" && (member.data.role !== "staff" || !member.data.barber_id)) ||
     !shop.data?.is_active
   )
     return null

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { findMasterAdmin } from "@/lib/auth/panel"
 import { createClient } from "@/lib/supabase/server"
 
 export async function requireMasterAdmin() {
@@ -13,11 +14,7 @@ export async function requireMasterAdmin() {
     redirect("/auth/login?reason=master_no_user")
   }
 
-  const { data: adminRow, error: adminError } = await supabase
-    .from("master_admins")
-    .select("id")
-    .eq("user_id", user.id)
-    .maybeSingle()
+  const { data: adminRow, error: adminError } = await findMasterAdmin(supabase, user.id)
 
   if (adminError || !adminRow) {
     redirect("/auth/login?reason=master_forbidden")

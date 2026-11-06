@@ -387,45 +387,40 @@ export function PublicPageSettings({
             <span className="text-xs text-amber-800">Rascunho</span>
           ) : null}
         </div>
-        <div className="mx-auto max-w-[16rem] overflow-hidden rounded-2xl border-[5px] border-[#16243b] bg-white shadow-sm">
-          <div className="flex items-center gap-2 px-3 py-3">
-            <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg bg-slate-900 text-white">
+        <div className="mx-auto max-w-[16rem] overflow-hidden rounded-2xl border-[5px] border-[#16243b] bg-[#f6f4f0] shadow-sm">
+          <div className="flex items-center gap-2 border-b border-[#e7e3db] bg-[#fcfbf8] px-3 py-2.5">
+            <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg bg-[#172134] text-[#f4d3b4]">
               {logoSrc ? (
                 <img src={logoSrc} alt="" className="size-full object-cover" />
               ) : (
                 <Scissors className="size-4" aria-hidden />
               )}
             </span>
-            <div className="min-w-0">
-              <p className="break-words text-xs font-semibold">
-                {name.trim() || "Barbearia"}
-              </p>
-              <p className="break-words text-[10px] text-slate-600">
-                {description.trim() || "Agende seu horário online"}
+            <p className="min-w-0 break-words text-xs font-semibold">
+              {name.trim() || "Barbearia"}
+            </p>
+          </div>
+          <div className="space-y-2 p-2">
+            <div className="relative isolate space-y-1 overflow-hidden rounded-lg bg-[#172134] bg-[radial-gradient(ellipse_at_top_right,#3c4e68,transparent_70%)] p-3 text-white">
+              {coverSrc ? (
+                <>
+                  <img src={coverSrc} alt="" className="absolute inset-0 -z-20 size-full object-cover" />
+                  <span aria-hidden className="absolute inset-0 -z-10 bg-linear-to-tr from-[#121b2c] via-[#121b2c]/90 to-[#121b2c]/35" />
+                </>
+              ) : null}
+              <p className="text-[9px] font-semibold tracking-wider text-[#f4d3b4] uppercase">Sua reserva online</p>
+              <p className="text-base font-semibold tracking-tight">Agende seu horário</p>
+              <p className="break-words text-[10px] leading-relaxed text-slate-200">
+                {description.trim() || "Escolha o serviço e reserve o melhor horário para você."}
               </p>
             </div>
-          </div>
-          <div className="relative overflow-hidden bg-[#16243b] px-3 py-4 text-white">
-            <img
-              src={coverSrc || "/bg-barbearia.jpg"}
-              alt=""
-              className="absolute inset-0 size-full object-cover opacity-30"
-            />
-            <div className="relative space-y-2">
-              <p className="text-center text-sm font-semibold">
-                Agende seu horário
-              </p>
-              <div className="space-y-1.5 rounded-lg bg-white p-2 text-[10px] text-slate-600">
-                <span className="block rounded border border-slate-200 px-2 py-1.5">
-                  Escolha o serviço
-                </span>
-                <span className="block rounded border border-slate-200 px-2 py-1.5">
-                  Escolha o horário
-                </span>
-                <span className="block rounded bg-[#16243b] px-2 py-1.5 text-center font-medium text-white">
-                  Confirmar agendamento
-                </span>
-              </div>
+            <div className="space-y-1.5 rounded-lg border border-[#e7e3db] bg-white p-2 text-[10px] text-slate-600">
+              <p className="font-semibold text-slate-900">Faça sua reserva</p>
+              <span className="block rounded border border-slate-200 px-2 py-1.5">Escolha o serviço</span>
+              <span className="block rounded border border-slate-200 px-2 py-1.5">Escolha o horário</span>
+              <span className="block rounded bg-[#172134] px-2 py-1.5 text-center font-medium text-white">
+                Confirmar agendamento
+              </span>
             </div>
           </div>
         </div>

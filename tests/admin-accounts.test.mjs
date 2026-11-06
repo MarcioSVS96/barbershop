@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { createClient } from "@supabase/supabase-js"
+import { createBarbershopAccount } from "../lib/admin/create-account.ts"
 import {
   deleteAccount,
   findUnlinkedAccounts,
@@ -323,4 +324,103 @@ test("storage preparation receives the verified master, target and shop scope", 
     p_barbershop_id: shopId,
     p_scope: "linked",
   })
+})
+
+function registration({ missingShop = false, authCode, rejectLink = false, lostLinkResponse = false } = {}) {
+  const form = new FormData()
+  form.set("barber_name", "  João da Silva  ")
+  form.set("email", "barber@example.com")
+  form.set("password", " password with spaces ")
+  form.set("barbershop_id", shopId)
+  form.set("role", "staff")
+  form.set("whatsapp_phone", "(81) 98765-4321")
+  const calls = []
+  let membership = null
+  const json = (value, status = 200) =>
+    new Response(JSON.stringify(value), {
+      status,
+      headers: { "content-type": "application/json", "x-supabase-api-version": "2024-01-01" },
+    })
+  const empty = () => new Response(null, { status: 204 })
+  const admin = createClient("https://registration.example.invalid", "test-key", {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: {
+      fetch: async (request, options) => {
+        const url = new URL(request)
+        const method = options.method
+        const body = options.body ? JSON.parse(options.body) : null
+        calls.push({ method, path: url.pathname, search: url.searchParams, body })
+        switch (`${method} ${url.pathname}`) {
+          case "GET /rest/v1/barbershop_settings":
+            return json(missingShop ? [] : [{ id: shopId }])
+          case "POST /auth/v1/admin/users":
+            return authCode ? json({ code: authCode, msg: "Auth rejected input" }, 422) : json(authUser(targetId))
+          case "POST /rest/v1/barbers":
+          case "PATCH /rest/v1/barbershop_settings":
+          case "DELETE /rest/v1/barbers":
+            return empty()
+          case "POST /rest/v1/barbershop_members":
+            if (rejectLink) return json({ code: "23503", message: "Invalid shop reference" }, 409)
+            membership = body
+            return lostLinkResponse ? json({ code: "PGRST000", message: "Connection lost" }, 500) : empty()
+          case "GET /rest/v1/barbershop_members":
+            return json(membership ? [{ user_id: membership.user_id }] : [])
+          case `DELETE /auth/v1/admin/users/${targetId}`:
+            return json(authUser(targetId))
+          default:
+            throw new Error(`Unexpected request: ${method} ${url.pathname}`)
+        }
+      },
+    },
+  })
+  return { form, calls, run: () => createBarbershopAccount(admin, form, quiet) }
+}
+
+for (const role of ["staff", "owner"]) {
+  test(`a new ${role} has a named barber record and membership in the selected shop`, async () => {
+    const { form, calls, run } = registration()
+    form.set("role", role)
+    assert.deepEqual(await run(), { whatsappSaved: true })
+    const [, auth, barber, member, shop] = calls
+    assert.equal(auth.body.password, " password with spaces ")
+    assert.deepEqual(barber.body, { id: barber.body.id, name: "João da Silva", barbershop_id: shopId })
+    assert.deepEqual(member.body, { user_id: targetId, barbershop_id: shopId, role, barber_id: barber.body.id })
+    assert.equal(shop.body.whatsapp_phone, "81987654321")
+  })
+}
+
+test("a blank barber name or missing shop prevents Auth account creation", async () => {
+  const blank = registration()
+  blank.form.set("barber_name", " ")
+  assert.match((await blank.run()).error, /nome do barbeiro/)
+  assert.equal(blank.calls.length, 0)
+
+  const missing = registration({ missingShop: true })
+  assert.match((await missing.run()).error, /Selecione uma barbearia/)
+  assert.deepEqual(missing.calls.map((call) => call.method), ["GET"])
+})
+
+test("a duplicate email is actionable and does not create an extra barber", async () => {
+  const { calls, run } = registration({ authCode: "email_exists" })
+  assert.match((await run()).error, /Contas sem vínculo/)
+  assert.deepEqual(calls.map((call) => call.path), ["/rest/v1/barbershop_settings", "/auth/v1/admin/users"])
+})
+
+test("a failed membership undoes the new Auth user and only the new barber", async () => {
+  const { calls, run } = registration({ rejectLink: true })
+  assert.match((await run()).error, /cadastro foi desfeito/)
+  const [, , barber, , authCleanup, barberCleanup] = calls
+  assert.equal(authCleanup.path, `/auth/v1/admin/users/${targetId}`)
+  assert.equal(authCleanup.method, "DELETE")
+  assert.equal(barberCleanup.method, "DELETE")
+  assert.equal(barberCleanup.search.get("id"), `eq.${barber.body.id}`)
+  assert.equal(barberCleanup.search.get("barbershop_id"), `eq.${shopId}`)
+})
+
+test("an existing new membership survives a lost success response", async () => {
+  const { calls, run } = registration({ lostLinkResponse: true })
+  assert.deepEqual(await run(), { whatsappSaved: true })
+  assert.equal(calls.some((call) => call.method === "DELETE"), false)
+  assert.equal(calls[4].path, "/rest/v1/barbershop_members")
+  assert.equal(calls[4].method, "GET")
 })

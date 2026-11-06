@@ -29,19 +29,19 @@ import { deleteBarberAndRelated } from "@/app/actions"
 export function ProfileManagement({
   barbershopId,
   barbers: initialBarbers,
-  role,
+  canManageShop,
   myBarberId,
 }: {
   barbershopId: string
   barbers: Barber[]
-  role: "owner" | "staff"
+  canManageShop: boolean
   myBarberId: string | null
 }) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const { toast } = useToast()
-  const isStaff = role === "staff"
-  const canManageBarbers = role === "owner"
+  const isStaff = !canManageShop
+  const canManageBarbers = canManageShop
   // =========================
   // GERENCIAR BARBEIROS (CRUD)
   // =========================
@@ -312,7 +312,7 @@ export function ProfileManagement({
         <div className="space-y-3">
           {barbers.map((barber) => {
             const canEdit = canEditThisBarber(barber.id)
-            const isOwnerTarget = role === "owner" && barber.id === myBarberId
+            const isOwnerTarget = canManageShop && barber.id === myBarberId
             const canDelete = canManageBarbers && !isOwnerTarget
 
             return (
