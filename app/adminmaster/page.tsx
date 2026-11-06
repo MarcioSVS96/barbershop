@@ -1,29 +1,22 @@
-﻿import Link from "next/link"
+import type { ReactNode } from "react"
+import Link from "next/link"
 import {
+  ArrowUpRight,
   Building2,
-  LayoutDashboard,
+  CheckCircle2,
+  ChevronRight,
+  MoreHorizontal,
+  Plus,
   ShieldCheck,
-  Store,
-  UserPlus,
-  Users,
-  Trash2,
-  Pencil,
 } from "lucide-react"
-import { requireMasterAdmin } from "@/lib/admin/master"
-import { createAdminClient } from "@/lib/supabase/admin"
-import { findUnlinkedAccounts, listAllAuthUsers } from "@/lib/admin/accounts"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Table,
   TableBody,
@@ -32,1006 +25,651 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  createBarbershop,
-  createBarbershopUser,
-  prepareDeleteMemberAndUser,
-  deleteMemberAndUser,
-  updateBarbershopUser,
-} from "./actions"
-import { BarbershopRow } from "./barbershop-row"
-import { CreationMessage } from "./creation-message"
+import { requireMasterAdmin } from "@/lib/admin/master"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { findUnlinkedAccounts, listAllAuthUsers } from "@/lib/admin/accounts"
 import { DeleteProfileDialog } from "./delete-profile-dialog"
 import { EditProfileDialog } from "./edit-profile-dialog"
+import {
+  ManageShopPanel,
+  NewShopPanel,
+  shopName,
+  type AdminShop,
+} from "./shop-panels"
+import { NewAccessPanel } from "./new-access-panel"
+import { AdminMasterNavigation } from "./navigation"
+import { deleteMemberAndUser } from "./actions"
 
 export const dynamic = "force-dynamic"
 
-type ShopRow = {
-  id: string
-  name: string | null
-  description: string | null
-  logo_url: string | null
-  slug?: string | null
-  updated_at?: string | null
-  is_active?: boolean | null
+const notices: Record<string, string> = {
+  barbershop_updated: "Dados da barbearia atualizados.",
+  barbershop_activated: "Barbearia ativada.",
+  barbershop_deactivated: "Barbearia desativada.",
+  barbershop_deleted: "Barbearia excluída.",
+  user_created: "Acesso criado e vinculado à barbearia.",
+  user_created_whatsapp_failed: "Acesso criado. O WhatsApp pode ser atualizado nos dados da barbearia.",
+  profile_updated: "Acesso atualizado.",
+  profile_deleted: "Conta de acesso excluída.",
 }
 
-type BarberRow = {
-  id: string
-  name: string
-  barbershop_id: string
+const primaryButton = "bg-slate-900 text-white shadow-none hover:bg-slate-800"
+
+function Notice({ children, error }: { children: ReactNode; error?: boolean }) {
+  return (
+    <div
+      role={error ? "alert" : "status"}
+      className={`flex items-start gap-2 rounded-xl border px-4 py-3 text-sm ${error ? "border-red-200 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}
+    >
+      {error ? null : (
+        <CheckCircle2 aria-hidden className="mt-0.5 size-4 shrink-0" />
+      )}
+      {children}
+    </div>
+  )
 }
 
-type MemberRow = {
-  user_id: string
-  barbershop_id: string
-  role: "owner" | "staff"
-  barber_id?: string | null
+function EmptyState({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="flex flex-col items-center gap-2 px-5 py-12 text-center">
+      <span className="mb-1 grid size-10 place-items-center rounded-xl bg-slate-100 text-slate-600">
+        <Building2 aria-hidden className="size-5" />
+      </span>
+      <p className="text-sm font-semibold text-slate-900">{title}</p>
+      <p className="max-w-sm text-sm text-slate-600">{text}</p>
+    </div>
+  )
 }
 
-function messageFromCode(code: string | null) {
-  switch (code) {
-    case "email_exists":
-      return {
-        title: "Email já cadastrado",
-        description:
-          "Já existe um usuário com esse email. Use outro email ou recupere a senha.",
-      }
-    case "staff_requires_barber":
-      return {
-        title: "Selecione o barbeiro",
-        description:
-          "Para criar conta de staff, você precisa vincular um barbeiro.",
-      }
-    case "barber_mismatch":
-      return {
-        title: "Barbeiro inválido",
-        description:
-          "O barbeiro selecionado não pertence à barbearia escolhida.",
-      }
-    case "invalid_role":
-      return {
-        title: "Perfil inválido",
-        description: "Escolha owner ou staff.",
-      }
-    case "user_created":
-      return {
-        title: "Perfil criado",
-        description: "Conta criada e vinculada com sucesso.",
-      }
-    case "barbershop_created":
-      return {
-        title: "Barbearia criada",
-        description: "Barbearia cadastrada com sucesso.",
-      }
-    case "profile_deleted":
-      return {
-        title: "Conta excluída",
-        description:
-          "A conta de acesso e seus vínculos foram excluídos com sucesso.",
-      }
-    case "barbershop_has_accounts":
-      return {
-        title: "A barbearia possui contas",
-        description:
-          "Exclua as contas na aba Perfis antes de remover a barbearia. Isso evita deixar contas de acesso sem vínculo.",
-      }
-    case "slug_exists":
-      return {
-        title: "Slug já cadastrado",
-        description: "Use outro slug ou ajuste o nome da barbearia.",
-      }
-    case "profile_updated":
-      return {
-        title: "Perfil atualizado",
-        description: "As alterações foram salvas com sucesso.",
-      }
-    case "profile_exists":
-      return {
-        title: "Perfil já existe",
-        description: "Esse usuário já está vinculado a essa barbearia.",
-      }
-    case "profile_update_missing_fields":
-      return {
-        title: "Dados incompletos",
-        description: "Preencha email, barbearia e perfil.",
-      }
-    case "profile_update_not_found":
-      return {
-        title: "Perfil não encontrado",
-        description: "Não foi possível localizar o perfil para atualizar.",
-      }
-    case "invalid_whatsapp":
-      return {
-        title: "WhatsApp inválido",
-        description:
-          "Use apenas DDD + 9 dígitos (11 no total). Ex: 81987654321.",
-      }
-    default:
-      return null
-  }
+function ShopStatus({ active }: { active: boolean }) {
+  return (
+    <Badge
+      className={`gap-1.5 rounded-full px-2.5 font-medium ${active ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-slate-100 text-slate-700"}`}
+    >
+      <span
+        aria-hidden
+        className={`size-1.5 rounded-full ${active ? "bg-emerald-600" : "bg-slate-500"}`}
+      />
+      {active ? "Ativa" : "Inativa"}
+    </Badge>
+  )
+}
+
+function AgendaLink({ slug }: { slug: string }) {
+  return (
+    <a
+      href={`/${encodeURIComponent(slug)}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 rounded-sm text-sm font-medium text-slate-700 hover:text-slate-950 hover:underline"
+    >
+      Abrir agenda <ArrowUpRight aria-hidden className="size-3.5" />
+    </a>
+  )
+}
+
+function AccessActions({
+  url,
+  edit,
+  label,
+}: {
+  url: string
+  edit?: boolean
+  label: string
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          size="icon"
+          variant="ghost"
+          aria-label={`Ações de ${label}`}
+          className="text-slate-600"
+        >
+          <MoreHorizontal aria-hidden />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {edit ? (
+          <DropdownMenuItem asChild>
+            <Link href={`${url}&edit=1`}>Editar acesso</Link>
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuItem asChild className="text-red-700 focus:text-red-800">
+          <Link href={`${url}&confirm=1`}>Excluir conta</Link>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 }
 
 export default async function AdminMasterPage({
   searchParams,
 }: {
-  searchParams?: Promise<{
-    msg?: string
-    tab?: string
-    confirm?: string
-    edit?: string
-    user_id?: string
-    barbershop_id?: string
-    scope?: string
-  }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const { user } = await requireMasterAdmin()
   const admin = createAdminClient()
-
-  const resolved = (await searchParams) || {}
-  const msgCode = resolved.msg ?? null
-  const tabParam = resolved.tab ?? "visao-geral"
-  const allowedTabs = new Set([
-    "visao-geral",
-    "nova-barbearia",
-    "nova-conta",
-    "barbearias-cadastradas",
-    "perfis",
+  const params = await searchParams
+  const param = (name: string) =>
+    typeof params[name] === "string" ? params[name] : undefined
+  const tab = param("tab")
+  const access = tab === "acessos" || tab === "perfis" || tab === "nova-conta"
+  const newPanel =
+    param("novo") ||
+    (tab === "nova-barbearia"
+      ? "barbearia"
+      : tab === "nova-conta"
+        ? "acesso"
+        : undefined)
+  const [
+    { data: shopsData, error: shopsError },
+    { data: members, error: membersError },
+  ] = await Promise.all([
+    admin
+      .from("barbershop_settings")
+      .select("id, name, slug, description, whatsapp_phone, is_active")
+      .order("name"),
+    admin
+      .from("barbershop_members")
+      .select("user_id, barbershop_id, role, barber:barbers(name)")
+      .overrideTypes<{
+        user_id: string
+        barbershop_id: string
+        role: "owner" | "staff"
+        barber: { name: string } | null
+      }[], { merge: false }>(),
   ])
-  const activeTab = allowedTabs.has(tabParam) ? tabParam : "visao-geral"
-  const msg = messageFromCode(msgCode)
-  const overlayPerfisCodes = new Set([
-    "profile_deleted",
-    "profile_updated",
-    "profile_exists",
-    "profile_update_missing_fields",
-    "profile_update_not_found",
-    "email_exists",
-    "invalid_role",
-  ])
-  const showOverlayMessage =
-    (msgCode === "barbershop_created" && activeTab === "nova-barbearia") ||
-    (msgCode === "user_created" && activeTab === "nova-conta") ||
-    (activeTab === "perfis" && !!msgCode && overlayPerfisCodes.has(msgCode)) ||
-    (activeTab === "barbearias-cadastradas" &&
-      msgCode === "barbershop_has_accounts")
-  const editUserId = resolved.user_id ?? null
-  const editBarbershopId = resolved.barbershop_id ?? null
-  const showEditDialog =
-    resolved.edit === "1" &&
-    activeTab === "perfis" &&
-    editUserId &&
-    editBarbershopId
-
-  const { data: shops, error: shopsError } = await admin
-    .from("barbershop_settings")
-    .select("*")
-    .order("id", { ascending: false })
-
-  if (shopsError) console.error("[adminmaster] shopsError:", shopsError)
-
-  const { data: members, error: membersError } = await admin
-    .from("barbershop_members")
-    .select("user_id, barbershop_id, role, barber_id")
-  if (membersError) console.error("[adminmaster] membersError:", membersError)
-
-  const { data: barbers, error: barbersError } = await admin
-    .from("barbers")
-    .select("id, name, barbershop_id")
-    .order("name", { ascending: true })
-  if (barbersError) console.error("[adminmaster] barbersError:", barbersError)
-
-  const memberCount = new Map<string, number>()
-  for (const row of members || []) {
-    memberCount.set(
-      row.barbershop_id,
-      (memberCount.get(row.barbershop_id) || 0) + 1,
+  if (shopsError || membersError)
+    console.error(
+      "[adminmaster] load shops and accesses",
+      shopsError || membersError,
     )
+
+  const shops: AdminShop[] = shopsData || []
+  const shopsById = new Map(shops.map((shop) => [shop.id, shop]))
+  const memberCounts = new Map<string, number>()
+  const shopsWithOwner = new Set<string>()
+  for (const member of members || []) {
+    memberCounts.set(
+      member.barbershop_id,
+      (memberCounts.get(member.barbershop_id) || 0) + 1,
+    )
+    if (member.role === "owner") shopsWithOwner.add(member.barbershop_id)
   }
 
-  const barbersByShop = new Map<string, { id: string; name: string }[]>()
-  const barbersById = new Map<string, string>()
-  for (const barber of (barbers || []) as BarberRow[]) {
-    const list = barbersByShop.get(barber.barbershop_id) || []
-    list.push({ id: barber.id, name: barber.name })
-    barbersByShop.set(barber.barbershop_id, list)
-    barbersById.set(barber.id, barber.name)
-  }
+  const selectedShop = shopsById.get(param("barbearia") || "")
+  const manageShop = shopsById.get(param("gerenciar") || "")
+  const onboarding = !!selectedShop && !access && param("etapa") === "2"
+  const accessUrl = selectedShop
+    ? `/adminmaster?tab=acessos&barbearia=${selectedShop.id}`
+    : "/adminmaster?tab=acessos"
+  const closeUrl = access ? accessUrl : "/adminmaster"
 
-  const shopsList = (shops || []) as ShopRow[]
-  const barbersList = (barbers || []) as BarberRow[]
-  const membersList = (members || []) as MemberRow[]
-  const activeShops = shopsList.filter(
-    (shop) => shop.is_active !== false,
-  ).length
-  const totalMembers = members?.length ?? 0
-
-  let authUsers: Awaited<ReturnType<typeof listAllAuthUsers>> = []
-  let userListError: unknown = null
-  try {
-    authUsers = await listAllAuthUsers(admin)
-  } catch (error) {
-    userListError = error
-    console.error("[adminmaster] usersError:", error)
-  }
-  const { data: masterAccounts, error: masterAccountsError } = await admin
-    .from("master_admins")
-    .select("user_id")
-  if (masterAccountsError)
-    console.error("[adminmaster] masterAccountsError:", masterAccountsError)
-  const unlinkedAccounts = userListError
-    ? []
-    : findUnlinkedAccounts(
-        authUsers,
-        membersError ? null : membersList,
-        masterAccountsError ? null : masterAccounts || [],
-        user.id,
-      )
-  const protectedAccountIds = new Set([
+  const [usersResult, mastersResult] = access
+    ? await Promise.all([
+        listAllAuthUsers(admin).then(
+          (users) => ({ users, error: null }),
+          (error: unknown) => ({ users: [], error }),
+        ),
+        admin.from("master_admins").select("user_id"),
+      ])
+    : [
+        { users: [], error: null },
+        { data: [], error: null },
+      ]
+  const accessError =
+    access &&
+    !!(membersError || shopsError || usersResult.error || mastersResult.error)
+  if (usersResult.error || mastersResult.error)
+    console.error(
+      "[adminmaster] load accounts",
+      usersResult.error || mastersResult.error,
+    )
+  const userEmail = new Map(
+    usersResult.users.map((account) => [account.id, account.email]),
+  )
+  const protectedIds = new Set([
     user.id,
-    ...(masterAccounts || []).map((row) => row.user_id),
+    ...(mastersResult.data || []).map((master) => master.user_id),
   ])
-  const userEmailById = new Map<string, string>()
-  for (const u of authUsers) {
-    if (u.id && u.email) userEmailById.set(u.id, u.email)
-  }
-
-  const shopsById = new Map<string, ShopRow>()
-  for (const shop of shopsList) {
-    shopsById.set(shop.id, shop)
-  }
-
-  const editMember =
-    showEditDialog && editUserId && editBarbershopId
-      ? membersList.find(
-          (member) =>
-            member.user_id === editUserId &&
-            member.barbershop_id === editBarbershopId,
+  const unlinked =
+    access && !accessError
+      ? findUnlinkedAccounts(
+          usersResult.users,
+          members || [],
+          mastersResult.data || [],
+          user.id,
         )
-      : null
-  const editEmail = editUserId
-    ? userEmailById.get(editUserId) || editUserId
-    : ""
-  const editRole = editMember?.role ?? "owner"
-
-  const confirmationScope =
-    resolved.scope === "unlinked" ? "unlinked" : "linked"
-  const confirmationMember = membersList.find(
+      : []
+  const targetId = param("user_id")
+  const targetMember = members?.find(
     (member) =>
-      member.user_id === resolved.user_id &&
-      member.barbershop_id === resolved.barbershop_id,
+      member.user_id === targetId &&
+      member.barbershop_id === param("barbershop_id"),
   )
-  const confirmationUnlinkedAccount = unlinkedAccounts.find(
-    (account) => account.id === resolved.user_id,
+  const targetUnlinked = unlinked.find((account) => account.id === targetId)
+  const deleteScope = param("scope") === "unlinked" ? "unlinked" : "linked"
+  const targetIsEditable =
+    access && !accessError && targetId && !protectedIds.has(targetId)
+  const confirmAccount =
+    targetIsEditable &&
+    param("confirm") === "1" &&
+    (deleteScope === "linked" ? targetMember : targetUnlinked)
+  const editAccount =
+    targetIsEditable &&
+    !confirmAccount &&
+    param("edit") === "1" &&
+    targetMember &&
+    userEmail.get(targetId)
+  const visibleMembers = (members || []).filter(
+    (member) => !selectedShop || member.barbershop_id === selectedShop.id,
   )
-  const canConfirmDeletion =
-    activeTab === "perfis" &&
-    resolved.confirm === "1" &&
-    resolved.user_id &&
-    !protectedAccountIds.has(resolved.user_id) &&
-    (confirmationScope === "unlinked"
-      ? !!confirmationUnlinkedAccount
-      : !!confirmationMember)
+
+  const activeCount = shops.filter((shop) => shop.is_active === true).length
+  const inactiveCount = shops.length - activeCount
+  const notice = notices[param("msg") || ""]
+  const newUrl = access
+    ? `${accessUrl}&novo=acesso`
+    : "/adminmaster?novo=barbearia"
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.08),transparent_55%),linear-gradient(to_bottom,hsl(var(--background)),hsl(var(--muted)/0.2))]">
-      <div className="mx-auto grid max-w-screen-2xl grid-cols-1 gap-6 px-4 py-8 lg:grid-cols-[260px_minmax(0,1fr)]">
-        <aside className="order-last flex flex-col gap-6 rounded-2xl border bg-card/80 p-6 shadow-sm lg:order-first lg:sticky lg:top-8 lg:self-start">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary">
-              <ShieldCheck className="h-5 w-5 text-primary-foreground" />
-            </div>
+    <div className="min-h-dvh bg-[#f5f7fa] text-slate-950 lg:grid lg:grid-cols-[224px_minmax(0,1fr)]">
+      <AdminMasterNavigation access={access} />
+      <main className="min-w-0">
+        <div className="hidden h-16 items-center justify-between border-b border-slate-200 bg-white px-8 text-xs font-medium text-slate-600 lg:flex">
+          <span>
+            Painel administrativo{" "}
+            <span aria-hidden className="px-1.5 text-slate-400">
+              /
+            </span>{" "}
+            {access ? "Acessos" : "Barbearias"}
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <ShieldCheck aria-hidden className="size-4" /> Admin Master
+          </span>
+        </div>
+        <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+          <header className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                Admin Master
+              <h1 className="text-[1.8rem] font-semibold leading-tight tracking-tight sm:text-[2.1rem]">
+                {access ? "Acessos" : "Barbearias"}
+              </h1>
+              <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+                {access
+                  ? "Gerencie quem pode entrar no painel de cada barbearia."
+                  : "Gerencie os cadastros e os endereços de agendamento."}
               </p>
-              <p className="text-lg font-semibold">Painel Geral</p>
             </div>
-          </div>
-
-          <nav className="space-y-2 text-sm">
-            <Link
-              className={`group flex items-center justify-between rounded-lg border px-3 py-2 font-medium transition ${
-                activeTab === "visao-geral"
-                  ? "border-primary/30 bg-primary/10 text-primary ring-1 ring-primary/20"
-                  : "hover:bg-muted/40"
-              }`}
-              href="/adminmaster?tab=visao-geral"
-            >
-              <span className="flex items-center gap-2">
-                <LayoutDashboard
-                  className={`h-4 w-4 ${
-                    activeTab === "visao-geral"
-                      ? "text-primary"
-                      : "text-muted-foreground group-hover:text-foreground"
-                  }`}
-                />
-                Visao geral
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {shopsList.length}
-              </span>
-            </Link>
-            <Link
-              className={`group flex items-center justify-between rounded-lg border px-3 py-2 font-medium transition ${
-                activeTab === "nova-barbearia"
-                  ? "border-primary/30 bg-primary/10 text-primary ring-1 ring-primary/20"
-                  : "hover:bg-muted/40"
-              }`}
-              href="/adminmaster?tab=nova-barbearia"
-            >
-              <span className="flex items-center gap-2">
-                <Store
-                  className={`h-4 w-4 ${
-                    activeTab === "nova-barbearia"
-                      ? "text-primary"
-                      : "text-muted-foreground group-hover:text-foreground"
-                  }`}
-                />
-                Cadastro
-              </span>
-              <span className="text-xs text-muted-foreground">+</span>
-            </Link>
-            <Link
-              className={`group flex items-center justify-between rounded-lg border px-3 py-2 font-medium transition ${
-                activeTab === "perfis"
-                  ? "border-primary/30 bg-primary/10 text-primary ring-1 ring-primary/20"
-                  : "hover:bg-muted/40"
-              }`}
-              href="/adminmaster?tab=perfis"
-            >
-              <span className="flex items-center gap-2">
-                <Users
-                  className={`h-4 w-4 ${
-                    activeTab === "perfis"
-                      ? "text-primary"
-                      : "text-muted-foreground group-hover:text-foreground"
-                  }`}
-                />
-                Perfis
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {membersList.length}
-              </span>
-            </Link>
-            <Link
-              className={`group flex items-center justify-between rounded-lg border px-3 py-2 font-medium transition ${
-                activeTab === "barbearias-cadastradas"
-                  ? "border-primary/30 bg-primary/10 text-primary ring-1 ring-primary/20"
-                  : "hover:bg-muted/40"
-              }`}
-              href="/adminmaster?tab=barbearias-cadastradas"
-            >
-              <span className="flex items-center gap-2">
-                <Building2
-                  className={`h-4 w-4 ${
-                    activeTab === "barbearias-cadastradas"
-                      ? "text-primary"
-                      : "text-muted-foreground group-hover:text-foreground"
-                  }`}
-                />
-                Barbearias
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {activeShops}/{shopsList.length}
-              </span>
-            </Link>
-          </nav>
-
-          <div className="mt-auto space-y-3 rounded-xl border bg-muted/40 p-3 text-xs">
-            <div className="flex flex-col gap-2">
-              <Button asChild size="sm" variant="outline" className="w-full">
-                <Link href="/">Ver site público</Link>
+            {!shopsError && (!access || shops.length > 0) ? (
+              <Button asChild className={primaryButton} size="lg">
+                <Link href={newUrl} scroll={false}>
+                  <Plus aria-hidden />{" "}
+                  {access ? "Novo acesso" : "Nova barbearia"}
+                </Link>
               </Button>
-              <form action="/auth/logout" method="post">
-                <Button
-                  type="submit"
-                  size="sm"
-                  variant="outline"
-                  className="w-full"
-                >
-                  Sair
-                </Button>
-              </form>
-            </div>
-          </div>
-        </aside>
+            ) : null}
+          </header>
 
-        <main className="space-y-8">
-          {showOverlayMessage && msg ? (
-            <CreationMessage title={msg.title} description={msg.description} />
+          {notice ? <Notice>{notice}</Notice> : null}
+          {shopsError ? (
+            <Notice error>
+              Não foi possível carregar as barbearias. Atualize a página e tente
+              novamente.
+            </Notice>
           ) : null}
-          <section
-            className={activeTab === "visao-geral" ? "space-y-4" : "hidden"}
-          >
-            <header
-              id="visao-geral"
-              className="rounded-2xl border bg-card/80 p-6 shadow-sm"
+
+          {!access ? (
+            <section
+              aria-label="Barbearias cadastradas"
+              className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
             >
-              <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h1 className="text-2xl font-bold tracking-tight">
-                    Admin Master
-                  </h1>
-                  <p className="text-sm text-muted-foreground">
-                    Controle central das barbearias, equipes e acessos.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 lg:hidden">
-                  <Button asChild size="sm" variant="outline">
-                    <Link href="/">Ver site público</Link>
-                  </Button>
-                  <form action="/auth/logout" method="post">
-                    <Button type="submit" size="sm" variant="outline">
-                      Sair
-                    </Button>
-                  </form>
-                </div>
-              </div>
-            </header>
-
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl border bg-card/80 p-4 shadow-sm">
-                <div className="text-xs text-muted-foreground">
-                  Barbearias cadastradas
-                </div>
-                <div className="mt-2 text-2xl font-semibold">
-                  {shopsList.length}
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {activeShops} ativas
-                </div>
-              </div>
-              <div className="rounded-2xl border bg-card/80 p-4 shadow-sm">
-                <div className="text-xs text-muted-foreground">
-                  Contas vinculadas
-                </div>
-                <div className="mt-2 text-2xl font-semibold">
-                  {totalMembers}
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  owners + staff
-                </div>
-              </div>
-              <div className="rounded-2xl border bg-card/80 p-4 shadow-sm">
-                <div className="text-xs text-muted-foreground">Barbeiros</div>
-                <div className="mt-2 text-2xl font-semibold">
-                  {barbersList.length}
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  cadastrados
-                </div>
-              </div>
-              <div className="rounded-2xl border bg-card/80 p-4 shadow-sm">
-                <div className="text-xs text-muted-foreground">
-                  Atualizacoes
-                </div>
-                <div className="mt-2 text-2xl font-semibold">
-                  {shopsList.filter((shop) => shop.updated_at).length}
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  barbearias com edicao recente
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {msg &&
-          !showOverlayMessage &&
-          (activeTab === "nova-barbearia" || activeTab === "nova-conta") ? (
-            <div className="rounded-lg border bg-card px-4 py-3">
-              <div className="text-sm font-medium">{msg.title}</div>
-              <div className="text-xs text-muted-foreground">
-                {msg.description}
-              </div>
-            </div>
-          ) : null}
-
-          <div
-            className={`grid gap-4 lg:grid-cols-[1fr_1fr] ${
-              activeTab === "nova-barbearia" || activeTab === "nova-conta"
-                ? ""
-                : "hidden"
-            }`}
-          >
-            <Card id="nova-barbearia" className="border-muted/60">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Store className="h-5 w-5 text-muted-foreground" />
-                  Nova barbearia
-                </CardTitle>
-                <CardDescription>
-                  Cadastre uma barbearia com slug e descrição.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form action={createBarbershop} className="space-y-3">
-                  <div className="space-y-1">
-                    <Label htmlFor="name">Nome</Label>
-                    <Input
-                      id="name"
-                      name="name"
-                      placeholder="Barbearia Premium"
-                      required
-                      className="h-9 w-full sm:max-w-sm"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="slug">Slug</Label>
-                    <Input
-                      id="slug"
-                      name="slug"
-                      placeholder="barbearia-premium"
-                      className="h-9 w-full sm:max-w-sm"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Se vazio, o slug será gerado automaticamente.
-                    </p>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="description">Descrição</Label>
-                    <Textarea
-                      id="description"
-                      name="description"
-                      rows={3}
-                      placeholder="Serviços de alto padrão."
-                      className="min-h-18"
-                    />
-                  </div>
-
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      name="is_active"
-                      defaultChecked
-                      className="h-4 w-4"
-                    />
-                    Barbearia ativa
-                  </label>
-
-                  <Button type="submit">Cadastrar barbearia</Button>
-                </form>
-              </CardContent>
-            </Card>
-
-            <Card id="nova-conta" className="border-muted/60">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <UserPlus className="h-5 w-5 text-muted-foreground" />
-                  Criar conta da barbearia
-                </CardTitle>
-                <CardDescription>
-                  Crie o usuário e vincule à barbearia. Para <b>staff</b>,
-                  selecione também o <b>barbeiro</b>.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form action={createBarbershopUser} className="space-y-3">
-                  <div className="space-y-1">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      placeholder="admin@barbearia.com"
-                      required
-                      className="h-9"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="password">Senha</Label>
-                    <Input
-                      id="password"
-                      name="password"
-                      type="password"
-                      placeholder="Crie uma senha forte"
-                      required
-                      className="h-9"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="barbershop_id">Barbearia</Label>
-                    <select
-                      id="barbershop_id"
-                      name="barbershop_id"
-                      className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-                      required
-                      defaultValue=""
-                    >
-                      <option value="" disabled>
-                        Selecione...
-                      </option>
-                      {shopsList.map((shop) => (
-                        <option key={shop.id} value={shop.id}>
-                          {shop.name || shop.slug || shop.id}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* ✅ NOVO: WhatsApp da barbearia (DDD + 9 dígitos) */}
-                  <div className="space-y-1">
-                    <Label htmlFor="whatsapp_phone">
-                      WhatsApp da barbearia
-                    </Label>
-                    <Input
-                      id="whatsapp_phone"
-                      name="whatsapp_phone"
-                      inputMode="numeric"
-                      placeholder="81987654321"
-                      maxLength={11}
-                      className="h-9"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Informe apenas DDD + número (11 dígitos). Ex: 81987654321.
-                      O 55 será aplicado automaticamente no link.
-                    </p>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="role">Perfil</Label>
-                    <select
-                      id="role"
-                      name="role"
-                      className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-                      defaultValue="owner"
-                    >
-                      <option value="owner">Owner</option>
-                      <option value="staff">Staff</option>
-                    </select>
-                    <p className="text-xs text-muted-foreground">
-                      Owner = dono/admin. Staff = barbeiro (precisa vincular um
-                      barbeiro).
-                    </p>
-                  </div>
-
-                  <Button type="submit">Criar conta</Button>
-                </form>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card
-            id="barbearias-cadastradas"
-            className={`border-muted/60 ${activeTab === "barbearias-cadastradas" ? "" : "hidden"}`}
-          >
-            <CardHeader>
-              <CardTitle>Barbearias cadastradas</CardTitle>
-              <CardDescription>
-                Edite, desative ou remova barbearias.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {shopsList.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Nenhuma barbearia cadastrada ainda.
-                  {shopsError ? (
-                    <span className="block mt-2 text-xs text-red-500">
-                      Erro ao carregar barbearias: {shopsError.message}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
+                <h2 className="text-sm font-semibold">Unidades cadastradas</h2>
+                {!shopsError && shops.length ? (
+                  <div className="flex items-center gap-3 text-xs font-medium text-slate-600">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span
+                        aria-hidden
+                        className="size-1.5 rounded-full bg-emerald-600"
+                      />{" "}
+                      {activeCount} {activeCount === 1 ? "ativa" : "ativas"}
                     </span>
-                  ) : null}
-                </p>
-              ) : (
-                <div className="overflow-hidden rounded-2xl border bg-card/70 shadow-sm">
-                  <Table>
-                    <TableHeader className="bg-muted/40">
-                      <TableRow>
-                        <TableHead className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                          Barbearia
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                          Slug
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                          Status
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                          Contas
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                          Barbeiros
-                        </TableHead>
-                        <TableHead className="text-right text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                          Ações
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody className="[&>tr:nth-child(even)]:bg-muted/20">
-                      {shopsList.map((shop) => {
-                        const shopBarbers = barbersByShop.get(shop.id) || []
-
-                        return (
-                          <BarbershopRow
-                            key={shop.id}
-                            shop={shop}
-                            memberCount={memberCount.get(shop.id) || 0}
-                            shopBarbers={shopBarbers}
-                          />
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span
+                        aria-hidden
+                        className="size-1.5 rounded-full bg-slate-400"
+                      />{" "}
+                      {inactiveCount}{" "}
+                      {inactiveCount === 1 ? "inativa" : "inativas"}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+              {membersError ? (
+                <div className="p-4">
+                  <Notice error>
+                    Não foi possível conferir os responsáveis das barbearias.
+                  </Notice>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card
-            id="perfis"
-            className={`border-muted/60 ${activeTab === "perfis" ? "" : "hidden"}`}
-          >
-            <CardHeader>
-              <CardTitle>Perfis das barbearias</CardTitle>
-              <CardDescription>
-                Owners e staff vinculados a cada barbearia.
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="space-y-4">
-              {showEditDialog && editMember ? (
-                <EditProfileDialog
-                  userId={String(editUserId)}
-                  currentBarbershopId={String(editBarbershopId)}
-                  email={editEmail}
-                  role={editRole}
-                  shops={shopsList}
-                  onCloseUrl="/adminmaster?tab=perfis"
-                  action={updateBarbershopUser}
+              ) : null}
+              {!shopsError && !shops.length ? (
+                <EmptyState
+                  title="Cadastre sua primeira barbearia"
+                  text="Crie o endereço de agendamento e o acesso do responsável."
                 />
               ) : null}
-              {/* ✅ CONFIRMAÇÃO SERVER-SAFE (sem JS) */}
-              {canConfirmDeletion ? (
-                <DeleteProfileDialog
-                  userId={String(resolved.user_id)}
-                  email={
-                    userEmailById.get(String(resolved.user_id)) ||
-                    String(resolved.user_id)
-                  }
-                  barbershopId={
-                    confirmationScope === "linked"
-                      ? String(resolved.barbershop_id)
-                      : null
-                  }
-                  scope={confirmationScope}
-                  onCloseUrl="/adminmaster?tab=perfis"
-                  action={deleteMemberAndUser}
-                />
+              {shops.length ? (
+                <Table className="table-fixed">
+                  <TableHeader className="bg-slate-50">
+                    <TableRow className="border-slate-200">
+                      <TableHead className="px-4 text-xs text-slate-600 sm:px-5">
+                        Barbearia
+                      </TableHead>
+                      <TableHead className="hidden w-28 px-3 text-xs text-slate-600 sm:table-cell">
+                        Situação
+                      </TableHead>
+                      <TableHead className="hidden w-36 px-3 text-xs text-slate-600 md:table-cell">
+                        Agenda
+                      </TableHead>
+                      <TableHead className="w-28 text-right text-xs text-slate-600 sm:w-36 sm:pr-5">
+                        Ações
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {shops.map((shop) => {
+                      const active = shop.is_active === true
+                      const name = shopName(shop)
+                      const initials = name
+                        .split(/\s+/)
+                        .slice(0, 2)
+                        .map((word) => Array.from(word)[0])
+                        .join("")
+                        .toUpperCase()
+                      const needsOwner =
+                        !membersError && !shopsWithOwner.has(shop.id)
+                      return (
+                        <TableRow
+                          key={shop.id}
+                          className="border-slate-100 hover:bg-slate-50/70"
+                        >
+                          <TableCell className="whitespace-normal px-4 py-4 sm:px-5">
+                            <div className="flex min-w-0 items-start gap-3 sm:items-center">
+                              <span
+                                aria-hidden
+                                className="hidden size-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-xs font-semibold text-slate-700 sm:grid"
+                              >
+                                {initials}
+                              </span>
+                              <div className="min-w-0 space-y-1">
+                                <p className="break-words font-semibold">
+                                  {name}
+                                </p>
+                                {shop.slug ? (
+                                  <p className="break-all text-xs text-slate-600">
+                                    /{shop.slug}
+                                  </p>
+                                ) : null}
+                                {needsOwner ? (
+                                  <Link
+                                    href={`/adminmaster?novo=acesso&barbearia=${shop.id}&etapa=2`}
+                                    scroll={false}
+                                    className="block text-xs font-medium text-amber-800 hover:underline"
+                                  >
+                                    Sem responsável · Criar acesso
+                                  </Link>
+                                ) : null}
+                                <div className="pt-1 sm:hidden">
+                                  <ShopStatus active={active} />
+                                </div>
+                                {active && shop.slug ? (
+                                  <div className="pt-0.5 md:hidden">
+                                    <AgendaLink slug={shop.slug} />
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="hidden px-3 sm:table-cell">
+                            <ShopStatus active={active} />
+                          </TableCell>
+                          <TableCell className="hidden px-3 md:table-cell">
+                            {active && shop.slug ? (
+                              <AgendaLink slug={shop.slug} />
+                            ) : (
+                              <span className="text-xs text-slate-500">
+                                Indisponível
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="pr-3 text-right sm:pr-5">
+                            <Button
+                              asChild
+                              variant="outline"
+                              size="sm"
+                              className="border-slate-200 shadow-none"
+                            >
+                              <Link
+                                href={`/adminmaster?gerenciar=${shop.id}`}
+                                aria-label={`Gerenciar ${name}`}
+                                scroll={false}
+                              >
+                                Gerenciar{" "}
+                                <ChevronRight
+                                  aria-hidden
+                                  className="hidden size-3.5 sm:block"
+                                />
+                              </Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
               ) : null}
-              {membersError || userListError ? (
-                <p
-                  role="alert"
-                  className="rounded-md border border-destructive/30 p-3 text-sm text-destructive"
-                >
-                  Não foi possível carregar todas as contas e vínculos. Atualize
-                  a página antes de gerenciar os perfis.
-                </p>
+            </section>
+          ) : (
+            <>
+              {selectedShop ? (
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <Badge
+                    variant="secondary"
+                    className="max-w-full whitespace-normal break-all bg-slate-200 text-slate-800"
+                  >
+                    {shopName(selectedShop)}
+                  </Badge>
+                  <Link
+                    href="/adminmaster?tab=acessos"
+                    className="text-xs font-medium text-slate-600 underline underline-offset-4"
+                  >
+                    Ver todas
+                  </Link>
+                </div>
               ) : null}
-
-              {membersList.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Nenhum perfil cadastrado ainda.
-                </p>
-              ) : (
-                <div className="overflow-hidden rounded-2xl border bg-card/70 shadow-sm">
-                  <Table>
-                    <TableHeader className="bg-muted/40">
-                      <TableRow>
-                        <TableHead className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              {accessError ? (
+                <Notice error>
+                  Não foi possível conferir os acessos. Atualize a página para
+                  tentar novamente.
+                </Notice>
+              ) : null}
+              <section
+                aria-label="Contas vinculadas"
+                className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+              >
+                <h2 className="border-b border-slate-200 px-4 py-4 text-sm font-semibold sm:px-5">
+                  Contas vinculadas
+                </h2>
+                {!accessError && !visibleMembers.length ? (
+                  <EmptyState
+                    title="Nenhum acesso cadastrado"
+                    text={
+                      shops.length
+                        ? "Crie uma conta para liberar o painel da barbearia."
+                        : "Cadastre uma barbearia para criar seu primeiro acesso."
+                    }
+                  />
+                ) : null}
+                {visibleMembers.length ? (
+                  <Table className="table-fixed">
+                    <TableHeader className="bg-slate-50">
+                      <TableRow className="border-slate-200">
+                        <TableHead className="px-4 text-xs text-slate-600 sm:px-5">
+                          Conta
+                        </TableHead>
+                        <TableHead className="hidden w-1/4 px-3 text-xs text-slate-600 md:table-cell">
                           Barbearia
                         </TableHead>
-                        <TableHead className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                          Email
+                        <TableHead className="hidden w-32 px-3 text-xs text-slate-600 sm:table-cell">
+                          Função
                         </TableHead>
-                        <TableHead className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                          Perfil
-                        </TableHead>
-                        <TableHead className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                          Barbeiro
-                        </TableHead>
-                        <TableHead className="text-right text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        <TableHead className="w-16 text-right text-xs text-slate-600 sm:pr-5">
                           Ações
                         </TableHead>
                       </TableRow>
                     </TableHeader>
-
-                    <TableBody className="[&>tr:nth-child(even)]:bg-muted/20">
-                      {membersList.map((member) => {
+                    <TableBody>
+                      {visibleMembers.map((member) => {
                         const shop = shopsById.get(member.barbershop_id)
                         const email =
-                          userEmailById.get(member.user_id) || member.user_id
-                        const barberName = member.barber_id
-                          ? barbersById.get(member.barber_id)
-                          : null
-
-                        // ✅ owner aparece como "Administrador"
-                        const barberLabel =
-                          member.role === "owner"
-                            ? "Administrador"
-                            : barberName || "Barbeiro não vinculado"
-
+                          userEmail.get(member.user_id) || "Conta sem e-mail"
+                        const role =
+                          member.role === "owner" ? "Responsável" : "Barbeiro"
+                        const url = `${accessUrl}&user_id=${encodeURIComponent(member.user_id)}&barbershop_id=${encodeURIComponent(member.barbershop_id)}`
                         return (
                           <TableRow
                             key={`${member.user_id}-${member.barbershop_id}`}
-                            className="transition hover:bg-muted/40"
+                            className="border-slate-100 hover:bg-slate-50/70"
                           >
-                            <TableCell>
-                              <div className="text-sm font-medium">
-                                {shop?.name ||
-                                  shop?.slug ||
-                                  member.barbershop_id}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                /{shop?.slug || "-"}
-                              </div>
+                            <TableCell className="whitespace-normal px-4 py-4 sm:px-5">
+                              <p className="break-words font-medium">{member.barber?.name || email}</p>
+                              {member.barber?.name ? (
+                                <p className="mt-1 break-all text-xs text-slate-600">{email}</p>
+                              ) : null}
+                              <p className="mt-1 break-words text-xs text-slate-600 md:hidden">
+                                {shop
+                                  ? shopName(shop)
+                                  : "Barbearia indisponível"}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-600 sm:hidden">
+                                {role}
+                              </p>
                             </TableCell>
-
-                            <TableCell>
-                              <div className="text-sm font-medium">{email}</div>
+                            <TableCell className="hidden whitespace-normal break-words px-3 text-slate-600 md:table-cell">
+                              {shop ? shopName(shop) : "Indisponível"}
                             </TableCell>
-
-                            <TableCell>
-                              {member.role === "owner" ? (
-                                <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20">
-                                  Owner
-                                </Badge>
-                              ) : (
-                                <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20">
-                                  Staff
-                                </Badge>
-                              )}
+                            <TableCell className="hidden px-3 sm:table-cell">
+                              <Badge
+                                variant="secondary"
+                                className="bg-slate-100 text-slate-700"
+                              >
+                                {role}
+                              </Badge>
                             </TableCell>
-
-                            <TableCell>
-                              <span className="text-sm font-medium">
-                                {barberLabel}
-                              </span>
-                            </TableCell>
-
-                            <TableCell className="text-right">
-                              <div className="inline-flex items-center gap-2">
-                                <Button
-                                  asChild
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  aria-label="Editar perfil"
-                                >
-                                  <Link
-                                    href={`/adminmaster?tab=perfis&edit=1&user_id=${encodeURIComponent(
-                                      member.user_id,
-                                    )}&barbershop_id=${encodeURIComponent(member.barbershop_id)}`}
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Link>
-                                </Button>
-                                {/* ✅ botão vai para "tela" de confirmação via querystring */}
-                                <form
-                                  action={prepareDeleteMemberAndUser}
-                                  className="inline-flex"
-                                >
-                                  <input
-                                    type="hidden"
-                                    name="user_id"
-                                    value={member.user_id}
-                                  />
-                                  <input
-                                    type="hidden"
-                                    name="barbershop_id"
-                                    value={member.barbershop_id}
-                                  />
-                                  <Button
-                                    type="submit"
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-8 w-8 text-destructive"
-                                    aria-label="Excluir perfil"
-                                    disabled={protectedAccountIds.has(
-                                      member.user_id,
-                                    )}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </form>
-                              </div>
+                            <TableCell className="pr-3 text-right sm:pr-5">
+                              {!accessError &&
+                              !protectedIds.has(member.user_id) ? (
+                                <AccessActions
+                                  url={url}
+                                  label={email}
+                                  edit={!!userEmail.get(member.user_id)}
+                                />
+                              ) : null}
                             </TableCell>
                           </TableRow>
                         )
                       })}
                     </TableBody>
                   </Table>
-                </div>
-              )}
-              <section
-                aria-labelledby="unlinked-accounts-title"
-                className="space-y-4 border-t pt-6"
-              >
-                <div>
-                  <h3
-                    id="unlinked-accounts-title"
-                    className="text-lg font-semibold"
-                  >
-                    Contas sem vínculo ({unlinkedAccounts.length})
-                  </h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Estas contas ainda existem no Supabase Auth, mas não estão
-                    vinculadas a uma barbearia. Confira o e-mail antes de
-                    excluir. Nenhuma conta é removida automaticamente.
-                  </p>
-                </div>
-                {membersError || userListError || masterAccountsError ? (
-                  <p role="alert" className="text-sm text-destructive">
-                    Não foi possível conferir com segurança as contas sem
-                    vínculo. Tente atualizar a página.
-                  </p>
-                ) : unlinkedAccounts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhuma conta sem vínculo encontrada.
-                  </p>
-                ) : (
-                  <div className="overflow-x-auto rounded-xl border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Conta</TableHead>
-                          <TableHead>Criada em</TableHead>
-                          <TableHead className="text-right">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {unlinkedAccounts.map((account) => (
-                          <TableRow key={account.id}>
-                            <TableCell>
-                              <div className="font-medium">
-                                {account.email || "Conta sem e-mail"}
-                              </div>
-                              <div className="break-all text-xs text-muted-foreground">
-                                {account.id}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {new Date(account.created_at).toLocaleDateString(
-                                "pt-BR",
-                                { timeZone: "America/Fortaleza" },
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <form action={prepareDeleteMemberAndUser}>
-                                <input
-                                  type="hidden"
-                                  name="user_id"
-                                  value={account.id}
-                                />
-                                <input
-                                  type="hidden"
-                                  name="scope"
-                                  value="unlinked"
-                                />
-                                <Button
-                                  type="submit"
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                  Excluir conta
-                                </Button>
-                              </form>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
+                ) : null}
               </section>
-            </CardContent>
-          </Card>
-        </main>
-      </div>
+              {unlinked.length > 0 && !selectedShop ? (
+                <section
+                  aria-labelledby="unlinked-heading"
+                  className="overflow-hidden rounded-2xl border border-amber-200 bg-white"
+                >
+                  <div className="border-b border-amber-200 bg-amber-50 px-4 py-4 sm:px-5">
+                    <h2
+                      id="unlinked-heading"
+                      className="text-sm font-semibold text-amber-950"
+                    >
+                      Contas sem vínculo ({unlinked.length})
+                    </h2>
+                    <p className="mt-1 text-xs text-amber-900">
+                      Confira as contas que ficaram sem barbearia associada.
+                    </p>
+                  </div>
+                  <ul className="divide-y divide-slate-100">
+                    {unlinked.map((account) => (
+                      <li
+                        key={account.id}
+                        className="flex items-center justify-between gap-2 px-4 py-3 sm:px-5"
+                      >
+                        <div className="min-w-0">
+                          <p className="break-all text-sm font-medium">
+                            {account.email || "Conta sem e-mail"}
+                          </p>
+                          <p className="break-all text-xs text-slate-600">
+                            {account.id}
+                          </p>
+                        </div>
+                        <AccessActions
+                          label={account.email || account.id}
+                          url={`${accessUrl}&scope=unlinked&user_id=${encodeURIComponent(account.id)}`}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+            </>
+          )}
+        </div>
+      </main>
+
+      {!access && newPanel === "barbearia" ? <NewShopPanel /> : null}
+      {newPanel === "acesso" && !shopsError && shops.length > 0 ? (
+        <NewAccessPanel
+          shops={shops}
+          shop={selectedShop}
+          onboarding={onboarding}
+          closeUrl={closeUrl}
+        />
+      ) : null}
+      {!access && !newPanel && manageShop ? (
+        <ManageShopPanel
+          shop={manageShop}
+          memberCount={memberCounts.get(manageShop.id) || 0}
+          accountsAvailable={!membersError}
+          confirmDeletion={param("confirmar") === "exclusao"}
+        />
+      ) : null}
+      {editAccount && targetMember && targetId ? (
+        <EditProfileDialog
+          userId={targetId}
+          currentBarbershopId={targetMember.barbershop_id}
+          email={editAccount}
+          role={targetMember.role === "owner" ? "owner" : "staff"}
+          shops={shops}
+          onCloseUrl={accessUrl}
+        />
+      ) : null}
+      {confirmAccount && targetId ? (
+        <DeleteProfileDialog
+          key={targetId}
+          userId={targetId}
+          email={userEmail.get(targetId) || targetId}
+          barbershopId={
+            deleteScope === "linked"
+              ? targetMember?.barbershop_id || null
+              : null
+          }
+          scope={deleteScope}
+          onCloseUrl={accessUrl}
+          action={deleteMemberAndUser}
+        />
+      ) : null}
     </div>
   )
 }

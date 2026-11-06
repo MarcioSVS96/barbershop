@@ -39,8 +39,9 @@ export default async function DashboardPage({
   const db = await createClient()
   const {
     data: { user },
+    error: userError,
   } = await db.auth.getUser()
-  if (!user) redirect("/auth/login?reason=slugbarbeiro_no_user")
+  if (userError || !user) redirect("/auth/login?reason=slugbarbeiro_no_user")
 
   const { data: shop } = await db
     .from("barbershop_settings")
@@ -64,9 +65,8 @@ export default async function DashboardPage({
   ) {
     redirect("/auth/login?reason=slugbarbeiro_no_membership")
   }
-  const role = member.role as "owner" | "staff"
   const barberId = member.barber_id as string | null
-  const staff = role === "staff"
+  const staff = member.role === "staff"
 
   const apptQuery = db
     .from("appointments")
@@ -162,7 +162,7 @@ export default async function DashboardPage({
   return (
     <BarberWorkspace
       shop={shop as BarbershopSettings & { slug: string }}
-      role={role}
+      canManageShop={!staff}
       barberId={barberId}
       logoUrl={logoUrl}
       appointments={appointments.data as Appointment[]}

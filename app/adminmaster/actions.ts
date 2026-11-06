@@ -1,447 +1,371 @@
-// C:\Projetos\barbershop\app\adminmaster\actions.ts
 "use server"
 
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { requireMasterAdmin } from "@/lib/admin/master"
+import { createBarbershopAccount } from "@/lib/admin/create-account"
+import { findMasterAdmin } from "@/lib/auth/panel"
 import { deleteAccount, type DeleteAccountState } from "@/lib/admin/accounts"
 
+type FormState = { error: string } | null
+
 function toString(value: FormDataEntryValue | null) {
-  if (typeof value === "string") return value.trim()
-  return ""
+  return typeof value === "string" ? value.trim() : ""
 }
 
 function slugify(input: string) {
-  const base = input
+  return input
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "")
+    .replace(/^-+|-+$/g, "")
+}
 
-  return base || "barbearia"
+function validSlug(slug: string) {
+  return (
+    /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) &&
+    !["adminmaster", "auth", "barbeiro", "api"].includes(slug)
+  )
 }
 
 function normalizeRole(role: string) {
-  const r = role?.toLowerCase()
-  if (r === "owner") return "owner"
-  if (r === "staff") return "staff"
-  return null
+  const value = role.toLowerCase()
+  return value === "owner" || value === "staff" ? value : null
 }
 
-function normalizeWhatsappBR(input: string) {
-  // regra: salvar somente DDD + 9 dígitos (11 no total)
-  // exemplo: 81987654321
-  const digits = (input || "").replace(/\D/g, "")
-  if (!digits) return null
-
-  const isValid = /^[1-9]{2}9[0-9]{8}$/.test(digits)
-  if (!isValid) return "__invalid__"
-
-  return digits
-}
-
-/* ============================================================
-   BARBEARIAS
-============================================================ */
-
-export async function createBarbershop(formData: FormData) {
-  await requireMasterAdmin()
-  const admin = createAdminClient()
-
+function readShop(formData: FormData) {
   const name = toString(formData.get("name"))
-  const slugInput = toString(formData.get("slug"))
-  const description = toString(formData.get("description"))
-  const isActive = formData.has("is_active")
-
-  if (!name) {
-    throw new Error("Nome obrigatório.")
-  }
-
-  const slug = slugInput || slugify(name)
-
-  const payload = {
-    id: crypto.randomUUID(),
+  return {
     name,
-    slug,
-    description: description || null,
-    is_active: isActive,
+    slug: toString(formData.get("slug")) || slugify(name),
+    description: toString(formData.get("description")) || null,
+    whatsapp_phone:
+      toString(formData.get("whatsapp_phone")).replace(/\D/g, "") || null,
     updated_at: new Date().toISOString(),
   }
-
-  const { error } = await admin.from("barbershop_settings").insert(payload)
-  if (error) {
-    const code = String((error as { code?: string }).code || "")
-    const message = String(error.message || "").toLowerCase()
-    if (
-      code === "23505" ||
-      message.includes("slug_key") ||
-      message.includes("unique")
-    ) {
-      redirect("/adminmaster?tab=nova-barbearia&msg=slug_exists")
-    }
-    throw new Error(error.message)
-  }
-
-  revalidatePath("/adminmaster")
-  revalidatePath("/")
-  revalidatePath(`/${slug}`)
-  redirect("/adminmaster?tab=nova-barbearia&msg=barbershop_created")
 }
 
-export async function updateBarbershop(formData: FormData) {
+function shopWriteError(error: { code?: string; message: string }) {
+  return {
+    error:
+      error.code === "23505"
+        ? "Este endereço já está em uso. Escolha outro endereço."
+        : "Não foi possível salvar a barbearia. Tente novamente.",
+  }
+}
+
+function refreshShop(...slugs: (string | null | undefined)[]) {
+  revalidatePath("/adminmaster")
+  revalidatePath("/")
+  for (const slug of new Set(slugs)) {
+    if (slug) {
+      revalidatePath(`/${slug}`)
+      revalidatePath(`/${slug}/barbeiro`)
+    }
+  }
+}
+
+export async function createBarbershop(
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
   await requireMasterAdmin()
   const admin = createAdminClient()
-
-  const id = toString(formData.get("id"))
-  const name = toString(formData.get("name"))
-  const slug = toString(formData.get("slug"))
-  const description = toString(formData.get("description"))
-  const isActive = formData.has("is_active")
-
-  if (!id || !name || !slug) {
-    throw new Error("Dados obrigatórios ausentes.")
+  const shop = readShop(formData)
+  if (!shop.name) return { error: "Informe o nome da barbearia." }
+  if (!validSlug(shop.slug))
+    return {
+      error:
+        "Escolha um endereço disponível com letras minúsculas, números e hífens.",
+    }
+  if (shop.whatsapp_phone && !/^[1-9]{2}9[0-9]{8}$/.test(shop.whatsapp_phone)) {
+    return { error: "Informe um WhatsApp com DDD e 9 dígitos." }
   }
 
-  const { data: currentRow } = await admin
+  const id = crypto.randomUUID()
+  const { error } = await admin.from("barbershop_settings").insert({
+    ...shop,
+    id,
+    is_active: formData.has("is_active"),
+  })
+  if (error) {
+    console.error("[adminmaster] create shop", error)
+    return shopWriteError(error)
+  }
+
+  refreshShop(shop.slug)
+  redirect(`/adminmaster?novo=acesso&barbearia=${id}&etapa=2`)
+}
+
+export async function updateBarbershop(
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  await requireMasterAdmin()
+  const admin = createAdminClient()
+  const id = toString(formData.get("id"))
+  const shop = readShop(formData)
+  if (!id || !shop.name) return { error: "Informe o nome da barbearia." }
+  const { data: current, error: lookupError } = await admin
     .from("barbershop_settings")
-    .select("slug")
+    .select("slug, whatsapp_phone")
     .eq("id", id)
     .maybeSingle()
-
-  const oldSlug = currentRow?.slug || null
-
-  const payload = {
-    name,
-    slug,
-    description: description || null,
-    is_active: isActive,
-    updated_at: new Date().toISOString(),
+  if (lookupError || !current)
+    return { error: "Não foi possível localizar a barbearia." }
+  if (shop.slug !== current.slug && !validSlug(shop.slug)) {
+    return {
+      error:
+        "Escolha um endereço disponível com letras minúsculas, números e hífens.",
+    }
+  }
+  if (
+    shop.whatsapp_phone &&
+    shop.whatsapp_phone !== current.whatsapp_phone &&
+    !/^[1-9]{2}9[0-9]{8}$/.test(shop.whatsapp_phone)
+  ) {
+    return { error: "Informe um WhatsApp com DDD e 9 dígitos." }
   }
 
   const { error } = await admin
     .from("barbershop_settings")
-    .update(payload)
+    .update(shop)
     .eq("id", id)
-
-  if (error) throw new Error(error.message)
-
-  revalidatePath("/adminmaster")
-  revalidatePath("/")
-  if (oldSlug) revalidatePath(`/${oldSlug}`)
-  revalidatePath(`/${slug}`)
+  if (error) {
+    console.error("[adminmaster] update shop", error)
+    return shopWriteError(error)
+  }
+  refreshShop(current.slug, shop.slug)
+  redirect("/adminmaster?msg=barbershop_updated")
 }
 
-export async function updateBarbershopActive(formData: FormData) {
+export async function updateBarbershopActive(
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
   await requireMasterAdmin()
   const admin = createAdminClient()
-
   const id = toString(formData.get("id"))
-  const isActive = formData.has("is_active")
-
-  if (!id) {
-    throw new Error("ID obrigatÃ³rio.")
-  }
-
-  const { error } = await admin
+  const isActive = formData.get("is_active") === "true"
+  const { data, error } = await admin
     .from("barbershop_settings")
     .update({ is_active: isActive, updated_at: new Date().toISOString() })
     .eq("id", id)
-
-  if (error) throw new Error(error.message)
-
-  revalidatePath("/adminmaster")
-  revalidatePath("/")
-  redirect("/adminmaster?tab=barbearias-cadastradas")
+    .select("slug")
+    .maybeSingle()
+  if (error || !data)
+    return { error: "Não foi possível alterar a situação da barbearia." }
+  refreshShop(data.slug)
+  redirect(
+    `/adminmaster?msg=${isActive ? "barbershop_activated" : "barbershop_deactivated"}`,
+  )
 }
 
-export async function deleteBarbershop(formData: FormData) {
+export async function deleteBarbershop(
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
   await requireMasterAdmin()
+  if (formData.get("confirmed") !== "1")
+    return { error: "Confirme a exclusão da barbearia." }
   const admin = createAdminClient()
-
   const id = toString(formData.get("id"))
-  if (!id) throw new Error("ID obrigatório.")
-
-  const { data: currentRow } = await admin
-    .from("barbershop_settings")
-    .select("slug")
-    .eq("id", id)
-    .maybeSingle()
-
-  const oldSlug = currentRow?.slug || null
-
-  // Removing the shop alone would hide its memberships but leave Auth accounts.
-  const { data: linkedAccounts, error: linkedAccountsError } = await admin
+  const { data: linkedAccounts, error: linksError } = await admin
     .from("barbershop_members")
     .select("user_id")
     .eq("barbershop_id", id)
     .limit(1)
-  if (linkedAccountsError)
-    throw new Error(
-      "Não foi possível conferir as contas vinculadas. A barbearia foi mantida.",
-    )
+  if (linksError)
+    return { error: "Não foi possível conferir os acessos vinculados." }
   if (linkedAccounts?.length)
-    redirect(
-      "/adminmaster?tab=barbearias-cadastradas&msg=barbershop_has_accounts",
-    )
+    return {
+      error: "Revise os acessos vinculados antes de excluir a barbearia.",
+    }
 
-  const { error } = await admin
+  const { data, error } = await admin
     .from("barbershop_settings")
     .delete()
     .eq("id", id)
-
-  if (error) throw new Error(error.message)
-
-  revalidatePath("/adminmaster")
-  revalidatePath("/")
-  if (oldSlug) revalidatePath(`/${oldSlug}`)
-}
-
-/* ============================================================
-   CRIAÇÃO DE CONTA (OWNER / STAFF)
-   → sempre cria barbeiro automaticamente
-============================================================ */
-
-export async function createBarbershopUser(formData: FormData) {
-  await requireMasterAdmin()
-  const admin = createAdminClient()
-
-  const email = toString(formData.get("email"))
-  const password = toString(formData.get("password"))
-  const barbershopId = toString(formData.get("barbershop_id"))
-  const roleRaw = toString(formData.get("role"))
-
-  const whatsappRaw = toString(formData.get("whatsapp_phone"))
-  const whatsappPhone = normalizeWhatsappBR(whatsappRaw)
-
-  if (!email || !password || !barbershopId) {
-    redirect("/adminmaster?tab=nova-conta&msg=invalid_role")
-  }
-
-  const role = normalizeRole(roleRaw)
-  if (!role) {
-    redirect("/adminmaster?tab=nova-conta&msg=invalid_role")
-  }
-
-  // whatsapp inválido (não segue DDD + 9 dígitos)
-  if (whatsappPhone === "__invalid__") {
-    redirect("/adminmaster?tab=nova-conta&msg=invalid_whatsapp")
-  }
-
-  /* =============================
-     1) CRIA USUÁRIO (AUTH)
-  ============================== */
-
-  const { data: userData, error: userError } =
-    await admin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-    })
-
-  if (userError) {
-    const msg = String(userError.message || "").toLowerCase()
-    if (
-      msg.includes("already") ||
-      msg.includes("exists") ||
-      msg.includes("email")
-    ) {
-      redirect("/adminmaster?tab=nova-conta&msg=email_exists")
-    }
-    throw new Error(userError.message)
-  }
-
-  if (!userData?.user) {
-    throw new Error("Não foi possível criar o usuário.")
-  }
-
-  /* =============================
-     2) CRIA BARBEIRO AUTOMÁTICO
-  ============================== */
-
-  const barberName = email.split("@")[0]?.replace(".", " ") || "Barbeiro"
-
-  const { data: barberData, error: barberError } = await admin
-    .from("barbers")
-    .insert({
-      id: crypto.randomUUID(),
-      name: barberName,
-      barbershop_id: barbershopId,
-    })
-    .select("id")
-    .single()
-
-  if (barberError || !barberData?.id) {
-    throw new Error("Erro ao criar barbeiro automaticamente.")
-  }
-
-  /* =============================
-     3) VINCULA USER ↔ BARBEIRO
-  ============================== */
-
-  const { error: memberError } = await admin.from("barbershop_members").insert({
-    id: crypto.randomUUID(),
-    user_id: userData.user.id,
-    barbershop_id: barbershopId,
-    role, // owner | staff
-    barber_id: barberData.id,
-  })
-
-  if (memberError) {
-    console.error("[adminmaster] member insert error:", memberError)
-    const m = String(memberError.message || "").toLowerCase()
-    if (m.includes("role_check") || m.includes("check constraint")) {
-      redirect("/adminmaster?tab=nova-conta&msg=invalid_role")
-    }
-    throw new Error(memberError.message)
-  }
-
-  /* =============================
-     4) SALVA WHATSAPP NA BARBEARIA (FALLBACK)
-     - salva null se vazio
-  ============================== */
-
-  // Só atualiza se o usuário preencheu algo (ou seja, whatsappPhone é string)
-  // Se quiser permitir limpar, você pode criar depois um fluxo de edição.
-  if (typeof whatsappPhone === "string" && whatsappPhone.length === 11) {
-    const { error: waErr } = await admin
-      .from("barbershop_settings")
-      .update({
-        whatsapp_phone: whatsappPhone,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", barbershopId)
-
-    if (waErr) {
-      console.error("[adminmaster] whatsapp update error:", waErr)
-      // não quebra a criação do usuário; apenas loga
-    }
-  }
-
-  revalidatePath("/adminmaster")
-  redirect("/adminmaster?tab=nova-conta&msg=user_created")
-}
-
-/* ============================================================
-   EDITAR PERFIL (OWNER / STAFF)
-============================================================ */
-
-export async function updateBarbershopUser(formData: FormData) {
-  await requireMasterAdmin()
-  const admin = createAdminClient()
-
-  const userId = toString(formData.get("user_id"))
-  const currentBarbershopId = toString(formData.get("current_barbershop_id"))
-  const email = toString(formData.get("email"))
-  const password = toString(formData.get("password"))
-  const barbershopId = toString(formData.get("barbershop_id"))
-  const roleRaw = toString(formData.get("role"))
-
-  if (!userId || !currentBarbershopId || !email || !barbershopId) {
-    redirect("/adminmaster?tab=perfis&msg=profile_update_missing_fields")
-  }
-
-  const role = normalizeRole(roleRaw)
-  if (!role) {
-    redirect("/adminmaster?tab=perfis&msg=invalid_role")
-  }
-
-  const updatePayload: { email: string; password?: string } = { email }
-  if (password) updatePayload.password = password
-
-  const { error: authError } = await admin.auth.admin.updateUserById(
-    userId,
-    updatePayload,
-  )
-  if (authError) {
-    const msg = String(authError.message || "").toLowerCase()
-    if (
-      msg.includes("already") ||
-      msg.includes("exists") ||
-      msg.includes("email")
-    ) {
-      redirect("/adminmaster?tab=perfis&msg=email_exists")
-    }
-    throw new Error(authError.message)
-  }
-
-  const { data: memberRow, error: memberRowErr } = await admin
-    .from("barbershop_members")
-    .select("barber_id, barbershop_id")
-    .eq("user_id", userId)
-    .eq("barbershop_id", currentBarbershopId)
+    .select("slug")
     .maybeSingle()
-
-  if (memberRowErr || !memberRow) {
-    redirect("/adminmaster?tab=perfis&msg=profile_update_not_found")
+  if (error || !data) {
+    console.error("[adminmaster] delete shop", error)
+    return {
+      error:
+        "Não foi possível excluir a barbearia. Verifique se há dados vinculados.",
+    }
   }
 
-  let nextBarberId = memberRow.barber_id
-  const barbershopChanged = memberRow.barbershop_id !== barbershopId
+  refreshShop(data.slug)
+  redirect("/adminmaster?msg=barbershop_deleted")
+}
 
-  if (barbershopChanged || (role === "staff" && !nextBarberId)) {
-    const barberName = email.split("@")[0]?.replace(".", " ") || "Barbeiro"
-    const { data: barberData, error: barberError } = await admin
-      .from("barbers")
-      .insert({
-        id: crypto.randomUUID(),
-        name: barberName,
-        barbershop_id: barbershopId,
-      })
+export async function createBarbershopUser(
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  await requireMasterAdmin()
+  const onboarding = formData.get("onboarding") === "1"
+  if (onboarding) formData.set("role", "owner")
+
+  const result = await createBarbershopAccount(createAdminClient(), formData)
+  if ("error" in result) return result
+
+  revalidatePath("/adminmaster")
+  const message = result.whatsappSaved ? "user_created" : "user_created_whatsapp_failed"
+  if (onboarding) redirect(`/adminmaster?msg=${message}`)
+  const shopId = toString(formData.get("barbershop_id"))
+  redirect(
+    `/adminmaster?tab=acessos&barbearia=${encodeURIComponent(shopId)}&msg=${message}`,
+  )
+}
+
+export async function updateBarbershopUser(
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  await requireMasterAdmin()
+  const admin = createAdminClient()
+  const userId = toString(formData.get("user_id"))
+  const currentShopId = toString(formData.get("current_barbershop_id"))
+  const nextShopId = toString(formData.get("barbershop_id"))
+  const email = toString(formData.get("email"))
+  const submittedPassword = formData.get("password")
+  const password = typeof submittedPassword === "string" ? submittedPassword : ""
+  const role = normalizeRole(toString(formData.get("role")))
+
+  if (
+    !userId ||
+    !currentShopId ||
+    !nextShopId ||
+    !email ||
+    !role ||
+    (password && password.length < 6)
+  ) {
+    return {
+      error: "Confira o e-mail, a função, a barbearia e o tamanho da senha.",
+    }
+  }
+
+  const [master, membership, shop] = await Promise.all([
+    findMasterAdmin(admin, userId),
+    admin
+      .from("barbershop_members")
+      .select("barber_id, role, barber:barbers(name)")
+      .eq("user_id", userId)
+      .eq("barbershop_id", currentShopId)
+      .maybeSingle()
+      .overrideTypes<{
+        barber_id: string | null
+        role: string
+        barber: { name: string } | null
+      } | null, { merge: false }>(),
+    admin
+      .from("barbershop_settings")
       .select("id")
-      .single()
+      .eq("id", nextShopId)
+      .maybeSingle(),
+  ])
 
-    if (barberError || !barberData?.id) {
-      throw new Error("Erro ao criar barbeiro automaticamente.")
+  if (
+    master.error ||
+    membership.error ||
+    shop.error ||
+    !membership.data ||
+    !shop.data
+  ) {
+    return {
+      error:
+        "Não foi possível conferir o vínculo do acesso. Atualize a página.",
     }
+  }
+  if (master.data)
+    return { error: "Este acesso administrativo está protegido." }
 
-    nextBarberId = barberData.id
+  if (nextShopId !== currentShopId) {
+    const existing = await admin
+      .from("barbershop_members")
+      .select("user_id")
+      .eq("user_id", userId)
+      .eq("barbershop_id", nextShopId)
+      .maybeSingle()
+    if (existing.error)
+      return {
+        error: "Não foi possível conferir o acesso na barbearia de destino.",
+      }
+    if (existing.data)
+      return { error: "A conta já está vinculada à barbearia de destino." }
   }
 
-  const { error: memberError } = await admin
-    .from("barbershop_members")
-    .update({
-      barbershop_id: barbershopId,
-      role,
-      barber_id: nextBarberId,
-    })
-    .eq("user_id", userId)
-    .eq("barbershop_id", currentBarbershopId)
-
-  if (memberError) {
-    const code = String((memberError as { code?: string }).code || "")
-    const message = String(memberError.message || "").toLowerCase()
-    if (code === "23505" || message.includes("unique")) {
-      redirect("/adminmaster?tab=perfis&msg=profile_exists")
+  const { error: authError } = await admin.auth.admin.updateUserById(userId, {
+    email,
+    ...(password ? { password } : {}),
+  })
+  if (authError) {
+    if (
+      ["email_exists", "user_already_exists"].includes(authError.code ?? "")
+    ) {
+      return { error: "Este e-mail já está em uso." }
     }
-    throw new Error(memberError.message)
+    return {
+      error: "Não foi possível atualizar a conta. Confira o e-mail e a senha.",
+    }
+  }
+
+  const member = membership.data
+  let newBarberId: string | null = null
+  if (nextShopId !== currentShopId || (role === "staff" && !member.barber_id)) {
+    newBarberId = crypto.randomUUID()
+    const { error } = await admin.from("barbers").insert({
+      id: newBarberId,
+      name: member.barber?.name || email.split("@")[0]?.replace(".", " ") || "Barbeiro",
+      barbershop_id: nextShopId,
+    })
+    if (error) {
+      console.error("[adminmaster] create barber for edited access", error)
+      revalidatePath("/adminmaster")
+      return {
+        error:
+          "Os dados da conta foram salvos. Não foi possível concluir a alteração do vínculo.",
+      }
+    }
+  }
+
+  if (nextShopId !== currentShopId || role !== member.role || newBarberId) {
+    const { data: updated, error } = await admin
+      .from("barbershop_members")
+      .update({
+        barbershop_id: nextShopId,
+        role,
+        barber_id: newBarberId ?? member.barber_id,
+      })
+      .eq("user_id", userId)
+      .eq("barbershop_id", currentShopId)
+      .select("user_id")
+      .maybeSingle()
+    if (error || !updated) {
+      console.error("[adminmaster] update access membership", error)
+      if (newBarberId && error && error.code === "23505") {
+        await admin
+          .from("barbers")
+          .delete()
+          .eq("id", newBarberId)
+          .eq("barbershop_id", nextShopId)
+      }
+      revalidatePath("/adminmaster")
+      return {
+        error:
+          "Os dados da conta foram salvos. Não foi possível concluir a alteração do vínculo.",
+      }
+    }
   }
 
   revalidatePath("/adminmaster")
-  redirect("/adminmaster?tab=perfis&msg=profile_updated")
-}
-
-/* ============================================================
-   EXCLUIR CONTA: AUTH PRIMEIRO, VÍNCULOS SOMENTE APÓS SUCESSO
-============================================================ */
-
-export async function prepareDeleteMemberAndUser(formData: FormData) {
-  await requireMasterAdmin()
-  const userId = toString(formData.get("user_id"))
-  const barbershopId = toString(formData.get("barbershop_id"))
-  const scope =
-    toString(formData.get("scope")) === "unlinked" ? "unlinked" : "linked"
-  if (!userId || (scope === "linked" && !barbershopId))
-    redirect("/adminmaster?tab=perfis")
-  const query = new URLSearchParams({
-    tab: "perfis",
-    confirm: "1",
-    user_id: userId,
-    scope,
-  })
-  if (scope === "linked") query.set("barbershop_id", barbershopId)
-  redirect(`/adminmaster?${query}`)
+  redirect(
+    `/adminmaster?tab=acessos&barbearia=${encodeURIComponent(nextShopId)}&msg=profile_updated`,
+  )
 }
 
 export async function deleteMemberAndUser(
@@ -470,5 +394,5 @@ export async function deleteMemberAndUser(
   }
   revalidatePath("/adminmaster")
   revalidatePath("/barbeiro")
-  redirect("/adminmaster?tab=perfis&msg=profile_deleted")
+  redirect("/adminmaster?tab=acessos&msg=profile_deleted")
 }

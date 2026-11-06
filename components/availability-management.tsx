@@ -34,16 +34,16 @@ const days = [
 export function AvailabilityManagement({
   availability,
   barbershopId,
-  role = "owner",
+  canManageShop,
 }: {
   availability: Availability[]
   barbershopId: string
-  role?: "owner" | "staff"
+  canManageShop: boolean
 }) {
   const router = useRouter()
   const { toast } = useToast()
   const db = useMemo(() => createClient(), [])
-  const editable = role === "owner"
+  const editable = canManageShop
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const [expandedDay, setExpandedDay] = useState<number | null>(null)
