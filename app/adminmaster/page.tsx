@@ -1,11 +1,7 @@
 ﻿import Link from "next/link"
 import {
-  Building2,
-  LayoutDashboard,
-  ShieldCheck,
   Store,
   UserPlus,
-  Users,
   Trash2,
   Pencil,
 } from "lucide-react"
@@ -34,7 +30,6 @@ import {
 } from "@/components/ui/table"
 import {
   createBarbershop,
-  createBarbershopUser,
   prepareDeleteMemberAndUser,
   deleteMemberAndUser,
   updateBarbershopUser,
@@ -43,6 +38,8 @@ import { BarbershopRow } from "./barbershop-row"
 import { CreationMessage } from "./creation-message"
 import { DeleteProfileDialog } from "./delete-profile-dialog"
 import { EditProfileDialog } from "./edit-profile-dialog"
+import { AdminMasterNavigation } from "./navigation"
+import { NewProfileForm } from "./new-profile-form"
 
 export const dynamic = "force-dynamic"
 
@@ -77,18 +74,6 @@ function messageFromCode(code: string | null) {
         description:
           "Já existe um usuário com esse email. Use outro email ou recupere a senha.",
       }
-    case "staff_requires_barber":
-      return {
-        title: "Selecione o barbeiro",
-        description:
-          "Para criar conta de staff, você precisa vincular um barbeiro.",
-      }
-    case "barber_mismatch":
-      return {
-        title: "Barbeiro inválido",
-        description:
-          "O barbeiro selecionado não pertence à barbearia escolhida.",
-      }
     case "invalid_role":
       return {
         title: "Perfil inválido",
@@ -98,6 +83,11 @@ function messageFromCode(code: string | null) {
       return {
         title: "Perfil criado",
         description: "Conta criada e vinculada com sucesso.",
+      }
+    case "user_created_whatsapp_failed":
+      return {
+        title: "Perfil criado",
+        description: "Conta vinculada. Não foi possível salvar o WhatsApp da barbearia.",
       }
     case "barbershop_created":
       return {
@@ -141,12 +131,6 @@ function messageFromCode(code: string | null) {
         title: "Perfil não encontrado",
         description: "Não foi possível localizar o perfil para atualizar.",
       }
-    case "invalid_whatsapp":
-      return {
-        title: "WhatsApp inválido",
-        description:
-          "Use apenas DDD + 9 dígitos (11 no total). Ex: 81987654321.",
-      }
     default:
       return null
   }
@@ -181,6 +165,8 @@ export default async function AdminMasterPage({
   const activeTab = allowedTabs.has(tabParam) ? tabParam : "visao-geral"
   const msg = messageFromCode(msgCode)
   const overlayPerfisCodes = new Set([
+    "user_created",
+    "user_created_whatsapp_failed",
     "profile_deleted",
     "profile_updated",
     "profile_exists",
@@ -313,131 +299,15 @@ export default async function AdminMasterPage({
       ? !!confirmationUnlinkedAccount
       : !!confirmationMember)
 
+  const navigation = { activeTab, activeShops, shopCount: shopsList.length, profileCount: membersList.length }
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.08),transparent_55%),linear-gradient(to_bottom,hsl(var(--background)),hsl(var(--muted)/0.2))]">
-      <div className="mx-auto grid max-w-screen-2xl grid-cols-1 gap-6 px-4 py-8 lg:grid-cols-[260px_minmax(0,1fr)]">
-        <aside className="order-last flex flex-col gap-6 rounded-2xl border bg-card/80 p-6 shadow-sm lg:order-first lg:sticky lg:top-8 lg:self-start">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary">
-              <ShieldCheck className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                Admin Master
-              </p>
-              <p className="text-lg font-semibold">Painel Geral</p>
-            </div>
-          </div>
+      <AdminMasterNavigation {...navigation} mobile />
+      <div className="mx-auto grid max-w-screen-2xl grid-cols-1 gap-6 px-4 py-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:py-8">
+        <AdminMasterNavigation {...navigation} />
 
-          <nav className="space-y-2 text-sm">
-            <Link
-              className={`group flex items-center justify-between rounded-lg border px-3 py-2 font-medium transition ${
-                activeTab === "visao-geral"
-                  ? "border-primary/30 bg-primary/10 text-primary ring-1 ring-primary/20"
-                  : "hover:bg-muted/40"
-              }`}
-              href="/adminmaster?tab=visao-geral"
-            >
-              <span className="flex items-center gap-2">
-                <LayoutDashboard
-                  className={`h-4 w-4 ${
-                    activeTab === "visao-geral"
-                      ? "text-primary"
-                      : "text-muted-foreground group-hover:text-foreground"
-                  }`}
-                />
-                Visao geral
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {shopsList.length}
-              </span>
-            </Link>
-            <Link
-              className={`group flex items-center justify-between rounded-lg border px-3 py-2 font-medium transition ${
-                activeTab === "nova-barbearia"
-                  ? "border-primary/30 bg-primary/10 text-primary ring-1 ring-primary/20"
-                  : "hover:bg-muted/40"
-              }`}
-              href="/adminmaster?tab=nova-barbearia"
-            >
-              <span className="flex items-center gap-2">
-                <Store
-                  className={`h-4 w-4 ${
-                    activeTab === "nova-barbearia"
-                      ? "text-primary"
-                      : "text-muted-foreground group-hover:text-foreground"
-                  }`}
-                />
-                Cadastro
-              </span>
-              <span className="text-xs text-muted-foreground">+</span>
-            </Link>
-            <Link
-              className={`group flex items-center justify-between rounded-lg border px-3 py-2 font-medium transition ${
-                activeTab === "perfis"
-                  ? "border-primary/30 bg-primary/10 text-primary ring-1 ring-primary/20"
-                  : "hover:bg-muted/40"
-              }`}
-              href="/adminmaster?tab=perfis"
-            >
-              <span className="flex items-center gap-2">
-                <Users
-                  className={`h-4 w-4 ${
-                    activeTab === "perfis"
-                      ? "text-primary"
-                      : "text-muted-foreground group-hover:text-foreground"
-                  }`}
-                />
-                Perfis
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {membersList.length}
-              </span>
-            </Link>
-            <Link
-              className={`group flex items-center justify-between rounded-lg border px-3 py-2 font-medium transition ${
-                activeTab === "barbearias-cadastradas"
-                  ? "border-primary/30 bg-primary/10 text-primary ring-1 ring-primary/20"
-                  : "hover:bg-muted/40"
-              }`}
-              href="/adminmaster?tab=barbearias-cadastradas"
-            >
-              <span className="flex items-center gap-2">
-                <Building2
-                  className={`h-4 w-4 ${
-                    activeTab === "barbearias-cadastradas"
-                      ? "text-primary"
-                      : "text-muted-foreground group-hover:text-foreground"
-                  }`}
-                />
-                Barbearias
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {activeShops}/{shopsList.length}
-              </span>
-            </Link>
-          </nav>
-
-          <div className="mt-auto space-y-3 rounded-xl border bg-muted/40 p-3 text-xs">
-            <div className="flex flex-col gap-2">
-              <Button asChild size="sm" variant="outline" className="w-full">
-                <Link href="/">Ver site público</Link>
-              </Button>
-              <form action="/auth/logout" method="post">
-                <Button
-                  type="submit"
-                  size="sm"
-                  variant="outline"
-                  className="w-full"
-                >
-                  Sair
-                </Button>
-              </form>
-            </div>
-          </div>
-        </aside>
-
-        <main className="space-y-8">
+        <main className="min-w-0 space-y-8">
           {showOverlayMessage && msg ? (
             <CreationMessage title={msg.title} description={msg.description} />
           ) : null}
@@ -527,14 +397,8 @@ export default async function AdminMasterPage({
             </div>
           ) : null}
 
-          <div
-            className={`grid gap-4 lg:grid-cols-[1fr_1fr] ${
-              activeTab === "nova-barbearia" || activeTab === "nova-conta"
-                ? ""
-                : "hidden"
-            }`}
-          >
-            <Card id="nova-barbearia" className="border-muted/60">
+          {activeTab === "nova-barbearia" ? (
+            <Card id="nova-barbearia" className="max-w-2xl border-muted/60">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Store className="h-5 w-5 text-muted-foreground" />
@@ -596,104 +460,24 @@ export default async function AdminMasterPage({
               </CardContent>
             </Card>
 
-            <Card id="nova-conta" className="border-muted/60">
+          ) : null}
+
+          {activeTab === "nova-conta" ? (
+            <Card id="nova-conta" className="max-w-2xl border-muted/60">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <UserPlus className="h-5 w-5 text-muted-foreground" />
-                  Criar conta da barbearia
+                  Criar perfil da barbearia
                 </CardTitle>
                 <CardDescription>
-                  Crie o usuário e vincule à barbearia. Para <b>staff</b>,
-                  selecione também o <b>barbeiro</b>.
+                  Cadastre o barbeiro e crie o acesso dele à barbearia em uma etapa.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <form action={createBarbershopUser} className="space-y-3">
-                  <div className="space-y-1">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      placeholder="admin@barbearia.com"
-                      required
-                      className="h-9"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="password">Senha</Label>
-                    <Input
-                      id="password"
-                      name="password"
-                      type="password"
-                      placeholder="Crie uma senha forte"
-                      required
-                      className="h-9"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="barbershop_id">Barbearia</Label>
-                    <select
-                      id="barbershop_id"
-                      name="barbershop_id"
-                      className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-                      required
-                      defaultValue=""
-                    >
-                      <option value="" disabled>
-                        Selecione...
-                      </option>
-                      {shopsList.map((shop) => (
-                        <option key={shop.id} value={shop.id}>
-                          {shop.name || shop.slug || shop.id}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* ✅ NOVO: WhatsApp da barbearia (DDD + 9 dígitos) */}
-                  <div className="space-y-1">
-                    <Label htmlFor="whatsapp_phone">
-                      WhatsApp da barbearia
-                    </Label>
-                    <Input
-                      id="whatsapp_phone"
-                      name="whatsapp_phone"
-                      inputMode="numeric"
-                      placeholder="81987654321"
-                      maxLength={11}
-                      className="h-9"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Informe apenas DDD + número (11 dígitos). Ex: 81987654321.
-                      O 55 será aplicado automaticamente no link.
-                    </p>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="role">Perfil</Label>
-                    <select
-                      id="role"
-                      name="role"
-                      className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-                      defaultValue="owner"
-                    >
-                      <option value="owner">Owner</option>
-                      <option value="staff">Staff</option>
-                    </select>
-                    <p className="text-xs text-muted-foreground">
-                      Owner = dono/admin. Staff = barbeiro (precisa vincular um
-                      barbeiro).
-                    </p>
-                  </div>
-
-                  <Button type="submit">Criar conta</Button>
-                </form>
+                <NewProfileForm shops={shopsList.map(({ id, name, slug }) => ({ id, name, slug }))} />
               </CardContent>
             </Card>
-          </div>
+          ) : null}
 
           <Card
             id="barbearias-cadastradas"
@@ -847,11 +631,8 @@ export default async function AdminMasterPage({
                           ? barbersById.get(member.barber_id)
                           : null
 
-                        // ✅ owner aparece como "Administrador"
                         const barberLabel =
-                          member.role === "owner"
-                            ? "Administrador"
-                            : barberName || "Barbeiro não vinculado"
+                          barberName || (member.role === "owner" ? "Administrador" : "Barbeiro não vinculado")
 
                         return (
                           <TableRow

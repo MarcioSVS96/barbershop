@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { requireMasterAdmin } from "@/lib/admin/master"
+import { createBarbershopAccount } from "@/lib/admin/create-account"
 import { deleteAccount, type DeleteAccountState } from "@/lib/admin/accounts"
 
 function toString(value: FormDataEntryValue | null) {
@@ -28,18 +29,6 @@ function normalizeRole(role: string) {
   if (r === "owner") return "owner"
   if (r === "staff") return "staff"
   return null
-}
-
-function normalizeWhatsappBR(input: string) {
-  // regra: salvar somente DDD + 9 dígitos (11 no total)
-  // exemplo: 81987654321
-  const digits = (input || "").replace(/\D/g, "")
-  if (!digits) return null
-
-  const isValid = /^[1-9]{2}9[0-9]{8}$/.test(digits)
-  if (!isValid) return "__invalid__"
-
-  return digits
 }
 
 /* ============================================================
@@ -203,124 +192,17 @@ export async function deleteBarbershop(formData: FormData) {
    → sempre cria barbeiro automaticamente
 ============================================================ */
 
-export async function createBarbershopUser(formData: FormData) {
+export async function createBarbershopUser(
+  _state: { error: string } | null,
+  formData: FormData,
+): Promise<{ error: string } | null> {
   await requireMasterAdmin()
-  const admin = createAdminClient()
-
-  const email = toString(formData.get("email"))
-  const password = toString(formData.get("password"))
-  const barbershopId = toString(formData.get("barbershop_id"))
-  const roleRaw = toString(formData.get("role"))
-
-  const whatsappRaw = toString(formData.get("whatsapp_phone"))
-  const whatsappPhone = normalizeWhatsappBR(whatsappRaw)
-
-  if (!email || !password || !barbershopId) {
-    redirect("/adminmaster?tab=nova-conta&msg=invalid_role")
-  }
-
-  const role = normalizeRole(roleRaw)
-  if (!role) {
-    redirect("/adminmaster?tab=nova-conta&msg=invalid_role")
-  }
-
-  // whatsapp inválido (não segue DDD + 9 dígitos)
-  if (whatsappPhone === "__invalid__") {
-    redirect("/adminmaster?tab=nova-conta&msg=invalid_whatsapp")
-  }
-
-  /* =============================
-     1) CRIA USUÁRIO (AUTH)
-  ============================== */
-
-  const { data: userData, error: userError } =
-    await admin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-    })
-
-  if (userError) {
-    const msg = String(userError.message || "").toLowerCase()
-    if (
-      msg.includes("already") ||
-      msg.includes("exists") ||
-      msg.includes("email")
-    ) {
-      redirect("/adminmaster?tab=nova-conta&msg=email_exists")
-    }
-    throw new Error(userError.message)
-  }
-
-  if (!userData?.user) {
-    throw new Error("Não foi possível criar o usuário.")
-  }
-
-  /* =============================
-     2) CRIA BARBEIRO AUTOMÁTICO
-  ============================== */
-
-  const barberName = email.split("@")[0]?.replace(".", " ") || "Barbeiro"
-
-  const { data: barberData, error: barberError } = await admin
-    .from("barbers")
-    .insert({
-      id: crypto.randomUUID(),
-      name: barberName,
-      barbershop_id: barbershopId,
-    })
-    .select("id")
-    .single()
-
-  if (barberError || !barberData?.id) {
-    throw new Error("Erro ao criar barbeiro automaticamente.")
-  }
-
-  /* =============================
-     3) VINCULA USER ↔ BARBEIRO
-  ============================== */
-
-  const { error: memberError } = await admin.from("barbershop_members").insert({
-    id: crypto.randomUUID(),
-    user_id: userData.user.id,
-    barbershop_id: barbershopId,
-    role, // owner | staff
-    barber_id: barberData.id,
-  })
-
-  if (memberError) {
-    console.error("[adminmaster] member insert error:", memberError)
-    const m = String(memberError.message || "").toLowerCase()
-    if (m.includes("role_check") || m.includes("check constraint")) {
-      redirect("/adminmaster?tab=nova-conta&msg=invalid_role")
-    }
-    throw new Error(memberError.message)
-  }
-
-  /* =============================
-     4) SALVA WHATSAPP NA BARBEARIA (FALLBACK)
-     - salva null se vazio
-  ============================== */
-
-  // Só atualiza se o usuário preencheu algo (ou seja, whatsappPhone é string)
-  // Se quiser permitir limpar, você pode criar depois um fluxo de edição.
-  if (typeof whatsappPhone === "string" && whatsappPhone.length === 11) {
-    const { error: waErr } = await admin
-      .from("barbershop_settings")
-      .update({
-        whatsapp_phone: whatsappPhone,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", barbershopId)
-
-    if (waErr) {
-      console.error("[adminmaster] whatsapp update error:", waErr)
-      // não quebra a criação do usuário; apenas loga
-    }
-  }
+  const result = await createBarbershopAccount(createAdminClient(), formData)
+  if ("error" in result) return result
 
   revalidatePath("/adminmaster")
-  redirect("/adminmaster?tab=nova-conta&msg=user_created")
+  const message = result.whatsappSaved ? "user_created" : "user_created_whatsapp_failed"
+  redirect(`/adminmaster?tab=perfis&msg=${message}`)
 }
 
 /* ============================================================
